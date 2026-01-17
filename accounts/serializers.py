@@ -1,0 +1,73 @@
+from rest_framework import serializers
+from .models import User, Profile
+from django.contrib.auth.password_validation import validate_password
+from rest_framework.exceptions import ValidationError
+from .models import Role, UserRole
+
+
+class ProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Profile
+        fields = ("bio", "avatar")
+
+
+class UserUpdateSerializer(serializers.ModelSerializer):
+    profile = ProfileSerializer()
+
+    class Meta:
+        model = User
+        fields = ("username", "profile")
+
+    def update(self, instance, validated_data):
+        profile_data = validated_data.pop("profile", None)
+
+        # Update user fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        # Update profile fields
+        if profile_data:
+            profile = instance.profile
+            for attr, value in profile_data.items():
+                setattr(profile, attr, value)
+            profile.save()
+
+        return instance
+
+
+class UserMeSerializer(serializers.ModelSerializer):
+    profile = ProfileSerializer(read_only=True)
+
+    class Meta:
+        model = User
+        fields = ("id", "email", "username", "profile")
+
+
+class SignupSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True)
+
+    class Meta:
+        model = User
+        fields = ("email", "username", "password")
+
+    def validate_password(self, value):
+        validate_password(value)
+        return value
+
+    def create(self, validated_data):
+        user = User.objects.create_user(
+            email=validated_data["email"],
+            username=validated_data["username"],
+            password=validated_data["password"],
+        )
+
+        # ✅ Auto-assign student role
+        student_role = Role.objects.get(name="student")
+        UserRole.objects.create(
+            user=user,
+            role=student_role,
+            is_active=True,
+        )
+
+        return user
