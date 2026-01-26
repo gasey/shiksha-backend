@@ -4,7 +4,6 @@ from .models import User
 from .models import Profile
 from .models import Role, UserRole
 
-
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
     model = User
