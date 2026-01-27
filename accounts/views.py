@@ -1,11 +1,8 @@
 import jwt
-
 from django.conf import settings
 from django.core.mail import send_mail
 from django.utils import timezone
 from django.contrib.auth import authenticate
-from accounts.audit import log_auth_event
-from accounts.models import AuthEvent
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -16,12 +13,14 @@ from rest_framework.permissions import (
 )
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
-
 from rest_framework_simplejwt.tokens import RefreshToken  # type: ignore
 
-from accounts.throttles import (
-    LoginRateThrottle,
-    ResendVerificationRateThrottle,
+from accounts.audit import log_auth_event
+from accounts.models import AuthEvent, User, Role, UserRole
+from accounts.throttles import LoginRateThrottle, ResendVerificationRateThrottle
+from accounts.email_tokens import (
+    generate_email_verification_token,
+    decode_email_verification_token,
 )
 
 from .serializers import (
@@ -29,13 +28,7 @@ from .serializers import (
     UserMeSerializer,
     UserUpdateSerializer,
 )
-
 from .permissions import IsEmailVerified
-from accounts.models import User, Role, UserRole
-from accounts.email_tokens import (
-    generate_email_verification_token,
-    decode_email_verification_token,
-)
 
 
 # 🔒 VERIFIED USERS ONLY
@@ -56,7 +49,7 @@ class MeView(APIView):
         return Response(UserMeSerializer(request.user).data)
 
 
-# 📝 SIGNUP — NO TOKENS ISSUED
+# 📝 SIGNUP — PUBLIC, NO JWT
 class SignupView(APIView):
     permission_classes = [AllowAny]
 
@@ -87,7 +80,7 @@ class SignupView(APIView):
         )
 
 
-# 🔑 LOGIN — TOKENS ONLY IF VERIFIED
+# 🔑 LOGIN — JWT ISSUED ONLY IF VERIFIED
 class LoginView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [LoginRateThrottle]
@@ -137,23 +130,18 @@ class VerifyEmailView(APIView):
 
     def post(self, request):
         token = request.data.get("token")
-
         if not token:
             raise ValidationError("Verification token is required.")
 
         try:
             payload = decode_email_verification_token(token)
-
             if payload.get("type") != "email_verification":
                 raise ValidationError("Invalid token type.")
 
             user = User.objects.get(id=payload["sub"])
 
             if user.is_verified:
-                return Response(
-                    {"detail": "Email already verified."},
-                    status=status.HTTP_200_OK,
-                )
+                return Response({"detail": "Email already verified."})
 
             user.is_verified = True
             user.verified_at = timezone.now()
@@ -165,10 +153,7 @@ class VerifyEmailView(APIView):
                 user=user,
             )
 
-            return Response(
-                {"detail": "Email verified successfully."},
-                status=status.HTTP_200_OK,
-            )
+            return Response({"detail": "Email verified successfully."})
 
         except jwt.ExpiredSignatureError:
             log_auth_event(request, AuthEvent.EVENT_VERIFY_EMAIL_FAILED)
@@ -178,14 +163,13 @@ class VerifyEmailView(APIView):
             raise ValidationError("Invalid verification token.")
 
 
-# 🔁 RESEND VERIFICATION
+# 🔁 RESEND VERIFICATION EMAIL
 class ResendVerificationEmailView(APIView):
     permission_classes = [IsAuthenticated]
     throttle_classes = [ResendVerificationRateThrottle]
 
     def post(self, request):
         user = request.user
-
         if user.is_verified:
             raise ValidationError("Email already verified.")
 
@@ -201,66 +185,8 @@ class ResendVerificationEmailView(APIView):
 
         log_auth_event(
             request,
-            AuthEvent.EVENT_VERIFY_EMAIL_SUCCESS,
+            AuthEvent.EVENT_RESEND_VERIFICATION,
             user=user,
         )
 
-        return Response(
-            {"detail": "Verification email resent."},
-            status=status.HTTP_200_OK,
-        )
-
-
-# 🔒 VERIFIED USERS ONLY
-class RequestTeacherRoleView(APIView):
-    permission_classes = [IsAuthenticated, IsEmailVerified]
-
-    def post(self, request):
-        user = request.user
-
-        if user.has_role("teacher"):
-            raise ValidationError("You are already a teacher.")
-
-        teacher_role = Role.objects.get(name="teacher")
-
-        if UserRole.objects.filter(user=user, role=teacher_role).exists():
-            raise ValidationError("Teacher role already requested.")
-
-        UserRole.objects.create(
-            user=user,
-            role=teacher_role,
-            is_active=False,
-        )
-
-        return Response(
-            {"detail": "Teacher role request submitted."},
-            status=status.HTTP_201_CREATED,
-        )
-
-
-class ApproveTeacherRoleView(APIView):
-    permission_classes = [IsAdminUser]
-
-    def post(self, request):
-        user_id = request.data.get("user_id")
-
-        if not user_id:
-            raise ValidationError("user_id is required.")
-
-        teacher_role = Role.objects.get(name="teacher")
-
-        try:
-            user_role = UserRole.objects.get(
-                user__id=user_id,
-                role=teacher_role,
-                is_active=False,
-            )
-        except UserRole.DoesNotExist:
-            raise ValidationError("No pending teacher request found.")
-
-        user_role.approve(admin_user=request.user)
-
-        return Response(
-            {"detail": "Teacher role approved."},
-            status=status.HTTP_200_OK,
-        )
+        return Response({"detail": "Verification email resent."})
