@@ -212,6 +212,6 @@ EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 
 EMAIL_HOST_USER = "shikshacom.noreply@gmail.com"
-EMAIL_HOST_PASSWORD = "Cmes@2026"
+EMAIL_HOST_PASSWORD = "vipfptcpycorjblx"
 
 DEFAULT_FROM_EMAIL = "Shiksha <noreply@shikshacom.com>"
