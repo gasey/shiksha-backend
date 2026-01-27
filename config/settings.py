@@ -155,7 +155,7 @@ REST_FRAMEWORK = {
     ),
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
-        "accounts.permissions.IsEmailVerified",
+
     ),
     "DEFAULT_THROTTLE_CLASSES": ["rest_framework.throttling.UserRateThrottle",
                                  "rest_framework.throttling.AnonRateThrottle",],
@@ -205,3 +205,13 @@ LOGGING = {
         "level": "ERROR",
     },
 }
+
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = "smtp.gmail.com"
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+
+EMAIL_HOST_USER = "shikshacom.noreply@gmail.com"
+EMAIL_HOST_PASSWORD = "Cmes@2026"
+
+DEFAULT_FROM_EMAIL = "Shiksha <noreply@shikshacom.com>"
