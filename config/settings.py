@@ -12,11 +12,11 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 import os
 from pathlib import Path
 from datetime import timedelta
-
+from dotenv import load_dotenv
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
+load_dotenv(BASE_DIR / ".env")
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
@@ -24,13 +24,15 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-i2ek6a7zoa_!ii(nly$-789gv@651v3l7j-&=!2ku0)*%(#kwe'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = os.getenv("DJANGO_DEBUG", "False") == "True"
+
+SECURE_SSL_REDIRECT = True
 
 ALLOWED_HOSTS = [
-"134.209.154.122",
-"localhost",
-"127.0.0.1",
-"api.shikshacom.com",
+    "134.209.154.122",
+    "localhost",
+    "127.0.0.1",
+    "api.shikshacom.com",
 ]
 
 AUTH_USER_MODEL = "accounts.User"
@@ -56,12 +58,12 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
+
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-	]
+]
 
 ROOT_URLCONF = 'config.urls'
 
@@ -128,12 +130,20 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
+
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+
+
 STATIC_URL = '/static/'
 
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=5),
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=10),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
@@ -145,7 +155,19 @@ REST_FRAMEWORK = {
     ),
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
+        "accounts.permissions.IsEmailVerified",
     ),
+    "DEFAULT_THROTTLE_CLASSES": ["rest_framework.throttling.UserRateThrottle",
+                                 "rest_framework.throttling.AnonRateThrottle",],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "100/day",
+        "user": "1000/day",
+
+        # 🔐 Custom limits
+        "login": "5/min",
+        "resend_verification": "3/hour",
+    },
+
 }
 
 # --- Security: HTTPS behind Nginx ---
@@ -163,6 +185,11 @@ CORS_ALLOWED_ORIGINS = [
     "https://www.shikshacom.com",
 ]
 CORS_ALLOW_CREDENTIALS = False
+
+CORS_ALLOW_HEADERS = [
+    "authorization",
+    "content-type",
+]
 
 
 LOGGING = {

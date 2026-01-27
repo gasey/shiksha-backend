@@ -10,6 +10,9 @@ class User(AbstractUser):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email = models.EmailField(unique=True)
 
+    is_verified = models.BooleanField(default=False)
+    verified_at = models.DateTimeField(null=True, blank=True)
+
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["username"]
 
@@ -75,3 +78,39 @@ class UserRole(models.Model):
 
     def __str__(self):
         return f"{self.user} → {self.role}"
+
+
+class AuthEvent(models.Model):
+    EVENT_LOGIN_SUCCESS = "LOGIN_SUCCESS"
+    EVENT_LOGIN_FAILED = "LOGIN_FAILED"
+    EVENT_LOGIN_BLOCKED_UNVERIFIED = "LOGIN_BLOCKED_UNVERIFIED"
+    EVENT_VERIFY_EMAIL_SUCCESS = "VERIFY_EMAIL_SUCCESS"
+    EVENT_VERIFY_EMAIL_FAILED = "VERIFY_EMAIL_FAILED"
+    EVENT_RESEND_VERIFICATION = "RESEND_VERIFICATION"
+
+    EVENT_CHOICES = [
+        (EVENT_LOGIN_SUCCESS, "Login Success"),
+        (EVENT_LOGIN_FAILED, "Login Failed"),
+        (EVENT_LOGIN_BLOCKED_UNVERIFIED, "Login Blocked (Unverified)"),
+        (EVENT_VERIFY_EMAIL_SUCCESS, "Verify Email Success"),
+        (EVENT_VERIFY_EMAIL_FAILED, "Verify Email Failed"),
+        (EVENT_RESEND_VERIFICATION, "Resend Verification Email"),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="auth_events",
+    )
+
+    event_type = models.CharField(max_length=50, choices=EVENT_CHOICES)
+
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.event_type} @ {self.created_at}"
