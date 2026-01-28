@@ -7,7 +7,6 @@ from django.shortcuts import redirect
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
-from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework_simplejwt.tokens import RefreshToken  # type: ignore
 
@@ -67,12 +66,12 @@ class SignupView(APIView):
             f"?token={token.token}"
         )
 
-        send_mail(
-            subject="Verify your email",
-            message=f"Click to verify your email:\n{verify_link}",
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[user.email],
-        )
+        # send_mail(
+        #  subject="Verify your email",
+        #   message=f"Click to verify your email:\n{verify_link}",
+       #     from_email=settings.DEFAULT_FROM_EMAIL,
+       #     recipient_list=[user.email],
+       # )
 
         return Response(
             {"detail": "Signup successful. Please verify your email."},
