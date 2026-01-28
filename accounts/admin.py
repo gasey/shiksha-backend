@@ -1,11 +1,8 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import User
-from .models import Profile
-from .models import Role, UserRole
+from .models import User, Profile, Role, UserRole
 
 
-@admin.register(User)
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
     model = User
@@ -43,11 +40,21 @@ class CustomUserAdmin(UserAdmin):
         ("Important dates", {"fields": ("last_login", "date_joined")}),
     )
 
+    ordering = ("email",)
+    search_fields = ("email", "username")
+
 
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
     list_display = ("user",)
 
 
-admin.site.register(Role)
-admin.site.register(UserRole)
+@admin.register(Role)
+class RoleAdmin(admin.ModelAdmin):
+    list_display = ("name",)
+
+
+@admin.register(UserRole)
+class UserRoleAdmin(admin.ModelAdmin):
+    list_display = ("user", "role", "is_active")
+    list_filter = ("is_active", "role")
