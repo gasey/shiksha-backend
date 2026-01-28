@@ -59,16 +59,17 @@ class SignupView(APIView):
         user.is_verified = False
         user.save(update_fields=["is_verified"])
 
-        token = EmailVerificationToken.objects.create(user=user)
+        token = EmailVerificationToken.generate(user)
 
         verify_link = f"https://api.shikshacom.com/api/verify-email/?token={token.token}"
 
+        # Email sending disabled for now (OK)
         # send_mail(
-        #  subject="Verify your email",
-        #   message=f"Click to verify your email:\n{verify_link}",
-       #     from_email=settings.DEFAULT_FROM_EMAIL,
-       #     recipient_list=[user.email],
-       # )
+        #     subject="Verify your email",
+        #     message=f"Click to verify your email:\n{verify_link}",
+        #     from_email=settings.DEFAULT_FROM_EMAIL,
+        #     recipient_list=[user.email],
+        # )
 
         return Response(
             {"detail": "Signup successful. Please verify your email."},
