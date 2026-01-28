@@ -1,3 +1,5 @@
+from rest_framework import status
+
 from django.conf import settings
 from django.core.mail import send_mail
 from django.utils import timezone
@@ -15,6 +17,8 @@ from accounts.models import (
     AuthEvent,
     User,
     EmailVerificationToken,
+    Role,
+    UserRole,
 )
 from accounts.throttles import (
     LoginRateThrottle,
@@ -177,7 +181,7 @@ class ResendVerificationEmailView(APIView):
         token = EmailVerificationToken.generate(user)
 
         verify_link = (
-            f"https://api.shikshacom.com/auth/verify-email/"
+            f"https://api.shikshacom.com/api/verify-email/"
             f"?token={token.token}"
         )
 
