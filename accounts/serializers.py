@@ -51,6 +51,16 @@ class SignupSerializer(serializers.ModelSerializer):
         model = User
         fields = ("email", "username", "password")
 
+    def validate_email(self, value):
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("Email is already registered.")
+        return value
+
+    def validate_username(self, value):
+        if User.objects.filter(username=value).exists():
+            raise serializers.ValidationError("Username is already taken.")
+        return value
+
     def validate_password(self, value):
         validate_password(value)
         return value
@@ -62,8 +72,12 @@ class SignupSerializer(serializers.ModelSerializer):
             password=validated_data["password"],
         )
 
+        # 👇 MUST be unverified
+        user.is_verified = False
+        user.save(update_fields=["is_verified"])
+
         # ✅ Auto-assign student role
-        student_role = Role.objects.get(name="student")
+        student_role = Role.objects.get(name="guest")
         UserRole.objects.create(
             user=user,
             role=student_role,
