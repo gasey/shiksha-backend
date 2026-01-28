@@ -49,12 +49,5 @@ class ProfileAdmin(admin.ModelAdmin):
     list_display = ("user",)
 
 
-@admin.register(Role)
-class RoleAdmin(admin.ModelAdmin):
-    list_display = ("name",)
-
-
-@admin.register(UserRole)
-class UserRoleAdmin(admin.ModelAdmin):
-    list_display = ("user", "role", "is_active")
-    list_filter = ("is_active", "role")
+admin.site.register(Role)
+admin.site.register(UserRole)
