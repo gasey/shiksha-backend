@@ -119,18 +119,18 @@ class AuthEvent(models.Model):
 
 
 class EmailVerificationToken(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(settings.AUTH_USER_MODEL,
-                             on_delete=models.CASCADE)
-    token = models.CharField(max_length=64, unique=True)
-    expires_at = models.DateTimeField()
+    user = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.CASCADE,
+        related_name="email_verification_tokens",
+    )
+    token = models.UUIDField(default=uuid.uuid4, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
 
-    @staticmethod
-    def generate(user):
-        EmailVerificationToken.objects.filter(user=user).delete()
-        return EmailVerificationToken.objects.create(
+    @classmethod
+    def generate(cls, user):
+        return cls.objects.create(
             user=user,
-            token=secrets.token_urlsafe(32),
-            expires_at=timezone.now() + timedelta(hours=24)
+            expires_at=timezone.now() + timedelta(hours=24),
         )
