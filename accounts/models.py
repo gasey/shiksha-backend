@@ -1,4 +1,5 @@
 import uuid
+import secrets
 from django.conf import settings
 from django.utils import timezone
 
@@ -114,3 +115,21 @@ class AuthEvent(models.Model):
 
     def __str__(self):
         return f"{self.event_type} @ {self.created_at}"
+
+
+class EmailVerificationToken(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL,
+                             on_delete=models.CASCADE)
+    token = models.CharField(max_length=64, unique=True)
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    @staticmethod
+    def generate(user):
+        EmailVerificationToken.objects.filter(user=user).delete()
+        return EmailVerificationToken.objects.create(
+            user=user,
+            token=secrets.token_urlsafe(32),
+            expires_at=timezone.now() + timedelta(hours=24)
+        )

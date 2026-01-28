@@ -1,26 +1,25 @@
-import jwt
 from django.conf import settings
 from django.core.mail import send_mail
 from django.utils import timezone
 from django.contrib.auth import authenticate
+from django.shortcuts import redirect
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import (
-    IsAuthenticated,
-    IsAdminUser,
-    AllowAny,
-)
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework_simplejwt.tokens import RefreshToken  # type: ignore
 
 from accounts.audit import log_auth_event
-from accounts.models import AuthEvent, User, Role, UserRole
-from accounts.throttles import LoginRateThrottle, ResendVerificationRateThrottle
-from accounts.email_tokens import (
-    generate_email_verification_token,
-    decode_email_verification_token,
+from accounts.models import (
+    AuthEvent,
+    User,
+    EmailVerificationToken,
+)
+from accounts.throttles import (
+    LoginRateThrottle,
+    ResendVerificationRateThrottle,
 )
 
 from .serializers import (
@@ -61,8 +60,12 @@ class SignupView(APIView):
         user.is_verified = False
         user.save(update_fields=["is_verified"])
 
-        token = generate_email_verification_token(user)
-        verify_link = f"https://shikshacom.com/verify-email?token={token}"
+        token = EmailVerificationToken.generate(user)
+
+        verify_link = (
+            f"https://api.shikshacom.com/auth/verify-email/"
+            f"?token={token.token}"
+        )
 
         send_mail(
             subject="Verify your email",
@@ -72,10 +75,7 @@ class SignupView(APIView):
         )
 
         return Response(
-            {
-                "detail": "Signup successful. Please verify your email.",
-                "user": UserMeSerializer(user).data,
-            },
+            {"detail": "Signup successful. Please verify your email."},
             status=status.HTTP_201_CREATED,
         )
 
@@ -124,57 +124,65 @@ class LoginView(APIView):
         )
 
 
-# ✅ EMAIL VERIFICATION
+# ✅ EMAIL VERIFICATION — GET + REDIRECT
 class VerifyEmailView(APIView):
     permission_classes = [AllowAny]
 
-    def post(self, request):
-        token = request.data.get("token")
-        if not token:
-            raise ValidationError("Verification token is required.")
+    def get(self, request):
+        token_value = request.query_params.get("token")
 
         try:
-            payload = decode_email_verification_token(token)
-            if payload.get("type") != "email_verification":
-                raise ValidationError("Invalid token type.")
+            token = EmailVerificationToken.objects.select_related("user").get(
+                token=token_value,
+                expires_at__gt=timezone.now(),
+            )
+        except EmailVerificationToken.DoesNotExist:
+            log_auth_event(request, AuthEvent.EVENT_VERIFY_EMAIL_FAILED)
+            return redirect(
+                "https://shikshacom.com/email-verified?status=failed"
+            )
 
-            user = User.objects.get(id=payload["sub"])
+        user = token.user
 
-            if user.is_verified:
-                return Response({"detail": "Email already verified."})
-
+        if not user.is_verified:
             user.is_verified = True
             user.verified_at = timezone.now()
             user.save(update_fields=["is_verified", "verified_at"])
 
-            log_auth_event(
-                request,
-                AuthEvent.EVENT_VERIFY_EMAIL_SUCCESS,
-                user=user,
-            )
+        token.delete()
 
-            return Response({"detail": "Email verified successfully."})
+        log_auth_event(
+            request,
+            AuthEvent.EVENT_VERIFY_EMAIL_SUCCESS,
+            user=user,
+        )
 
-        except jwt.ExpiredSignatureError:
-            log_auth_event(request, AuthEvent.EVENT_VERIFY_EMAIL_FAILED)
-            raise ValidationError("Verification token expired.")
-        except jwt.InvalidTokenError:
-            log_auth_event(request, AuthEvent.EVENT_VERIFY_EMAIL_FAILED)
-            raise ValidationError("Invalid verification token.")
+        return redirect(
+            "https://shikshacom.com/email-verified?status=success"
+        )
 
 
-# 🔁 RESEND VERIFICATION EMAIL
+# 🔁 RESEND VERIFICATION EMAIL — PUBLIC
 class ResendVerificationEmailView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
     throttle_classes = [ResendVerificationRateThrottle]
 
     def post(self, request):
-        user = request.user
+        email = request.data.get("email")
+
+        user = User.objects.filter(email=email).first()
+        if not user:
+            raise ValidationError("User not found.")
+
         if user.is_verified:
             raise ValidationError("Email already verified.")
 
-        token = generate_email_verification_token(user)
-        verify_link = f"https://shikshacom.com/verify-email?token={token}"
+        token = EmailVerificationToken.generate(user)
+
+        verify_link = (
+            f"https://api.shikshacom.com/auth/verify-email/"
+            f"?token={token.token}"
+        )
 
         send_mail(
             subject="Verify your email",
@@ -190,3 +198,56 @@ class ResendVerificationEmailView(APIView):
         )
 
         return Response({"detail": "Verification email resent."})
+
+
+class RequestTeacherRoleView(APIView):
+    permission_classes = [IsAuthenticated, IsEmailVerified]
+
+    def post(self, request):
+        user = request.user
+
+        if user.has_role("teacher"):
+            raise ValidationError("You are already a teacher.")
+
+        teacher_role = Role.objects.get(name="teacher")
+
+        if UserRole.objects.filter(user=user, role=teacher_role).exists():
+            raise ValidationError("Teacher role already requested.")
+
+        UserRole.objects.create(
+            user=user,
+            role=teacher_role,
+            is_active=False,
+        )
+
+        return Response(
+            {"detail": "Teacher role request submitted."},
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class ApproveTeacherRoleView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def post(self, request):
+        user_id = request.data.get("user_id")
+        if not user_id:
+            raise ValidationError("user_id is required.")
+
+        teacher_role = Role.objects.get(name="teacher")
+
+        try:
+            user_role = UserRole.objects.get(
+                user__id=user_id,
+                role=teacher_role,
+                is_active=False,
+            )
+        except UserRole.DoesNotExist:
+            raise ValidationError("No pending teacher request found.")
+
+        user_role.approve(admin_user=request.user)
+
+        return Response(
+            {"detail": "Teacher role approved."},
+            status=status.HTTP_200_OK,
+        )
