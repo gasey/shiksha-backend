@@ -33,7 +33,7 @@ from .serializers import (
 from .permissions import IsEmailVerified
 
 
-# 🔒 VERIFIED USERS ONLY
+#  VERIFIED USERS ONLY
 class MeView(APIView):
     permission_classes = [IsAuthenticated, IsEmailVerified]
 
@@ -51,7 +51,7 @@ class MeView(APIView):
         return Response(UserMeSerializer(request.user).data)
 
 
-# 📝 SIGNUP — PUBLIC, NO JWT
+#  SIGNUP — PUBLIC, NO JWT
 class SignupView(APIView):
     permission_classes = [AllowAny]
 
@@ -81,7 +81,7 @@ class SignupView(APIView):
         )
 
 
-# 🔑 LOGIN — JWT ISSUED ONLY IF VERIFIED
+#  LOGIN — JWT ISSUED ONLY IF VERIFIED
 class LoginView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [LoginRateThrottle]

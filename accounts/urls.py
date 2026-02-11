@@ -14,7 +14,7 @@ urlpatterns = [
     path("signup/", SignupView.as_view(), name="signup"),
     path("login/", LoginView.as_view(), name="login"),
 
-    # ✅ Email verification # GET /auth/verify-email/?token=...
+    #  Email verification # GET /auth/verify-email/?token=...
     path("verify-email/", VerifyEmailView.as_view(), name="verify-email"),
     path(
         "resend-verification/",
@@ -22,7 +22,7 @@ urlpatterns = [
         name="resend-verification",
     ),
 
-    # ✅ Roles
+    #  Roles
     path(
         "roles/request-teacher/",
         RequestTeacherRoleView.as_view(),

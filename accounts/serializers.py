@@ -43,6 +43,12 @@ class UserMeSerializer(serializers.ModelSerializer):
         model = User
         fields = ("id", "email", "username", "profile")
 
+    def get_roles(self, obj)
+    return [
+        user_role.role.name
+        for user_role in obj.user_roles.filter(is_active=True)
+    ]
+
 
 class SignupSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
