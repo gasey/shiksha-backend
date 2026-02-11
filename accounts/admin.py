@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from .models import User, Profile, Role, UserRole
-
+from courses.models import Course,Subject,Chapter
 
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
@@ -51,3 +51,28 @@ class ProfileAdmin(admin.ModelAdmin):
 
 admin.site.register(Role)
 admin.site.register(UserRole)
+
+
+@admin.register(Course)
+class CourseAdmin(admin.ModelAdmin):
+    list_display = ("title", "teacher", "created_at")
+    search_fields = ("title",)
+    list_filter = ("created_at",)
+
+
+@admin.register(Subject)
+class SubjectAdmin(admin.ModelAdmin):
+    list_display = ("name", "course", "order")
+    list_filter = ("course",)
+    ordering = ("course", "order")
+
+
+@admin.register(Chapter)
+class ChapterAdmin(admin.ModelAdmin):
+    list_display = ("title", "subject", "order")
+    list_filter = ("subject",)
+    ordering = ("subject", "order")
+
+
+admin.site.register(Order)
+admin.site.register(Payment)
