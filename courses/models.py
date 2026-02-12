@@ -42,6 +42,7 @@ class Subject(models.Model):
     def _str_(self):
         return f"{self.course.title} → {self.name}"
 
+
 class Chapter(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
@@ -62,6 +63,7 @@ class Chapter(models.Model):
 
     def _str_(self):
         return self.title
+
 
 class CourseDetail(models.Model):
     course = models.OneToOneField(

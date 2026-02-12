@@ -3,6 +3,7 @@ from django.contrib.auth.admin import UserAdmin
 from .models import User, Profile, Role, UserRole
 from courses.models import Course, Subject, Chapter
 from payments.models import Order, Payment
+from enrollments.models import Enrollment
 
 
 @admin.register(User)
@@ -78,3 +79,10 @@ class ChapterAdmin(admin.ModelAdmin):
 
 admin.site.register(Order)
 admin.site.register(Payment)
+
+
+@admin.register(Enrollment)
+class EnrollmentAdmin(admin.ModelAdmin):
+    list_display = ("user", "course", "status", "enrolled_at")
+    list_filter = ("status", "enrolled_at")
+    search_fields = ("user__email", "course__title")
