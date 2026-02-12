@@ -51,6 +51,8 @@ INSTALLED_APPS = [
     "courses",
     "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
+    "enrollments",
+    "payments",
 ]
 
 MIDDLEWARE = [
