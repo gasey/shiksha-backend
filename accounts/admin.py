@@ -1,7 +1,9 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from .models import User, Profile, Role, UserRole
-from courses.models import Course,Subject,Chapter
+from courses.models import Course, Subject, Chapter
+from payments.models import Order, Payment
+
 
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
