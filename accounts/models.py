@@ -30,15 +30,60 @@ class User(AbstractUser):
 
 class Profile(models.Model):
     user = models.OneToOneField(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="profile"
     )
-    bio = models.TextField(blank=True)
-    avatar = models.ImageField(upload_to="avatars/", null=True, blank=True)
+
+    full_name = models.CharField(max_length=255, null=True, blank=True)
+    phone = models.CharField(max_length=20, blank=True)
+
+    student_id = models.CharField(
+        max_length=50,
+        unique=True,
+        null=True,
+        blank=True
+    )
+
+    avatar_image = models.ImageField(
+        upload_to="avatar/",
+        null=True,
+        blank=True
+    )
+
+    avatar_emoji = models.CharField(
+        max_length=10,
+        blank=True,
+        null=True
+    )
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def avatar_type(self):
+        if self.avatar_image:
+            return "image"
+        if self.avatar_emoji:
+            return "emoji"
+        return None
+
+    def avatar_value(self):
+        if self.avatar_image:
+            return self.avatar_image.url
+        if self.avatar_emoji:
+            return self.avatar_emoji
+        return None
 
     def __str__(self):
-        return f"Profile({self.user.email})"
+        return f"{self.user.email} Profile"
+
+    @property
+    def is_complete(self):
+        return bool(
+            self.full_name
+            and self.phone
+            and self.user.is_verified
+            and self.user.enrollments.filter(status="ACTIVE").exists()
+        )
 
 
 class Role(models.Model):
@@ -120,7 +165,7 @@ class AuthEvent(models.Model):
 
 class EmailVerificationToken(models.Model):
     user = models.ForeignKey(
-        "accounts.User",
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="email_verification_tokens",
     )
@@ -134,3 +179,6 @@ class EmailVerificationToken(models.Model):
             user=user,
             expires_at=timezone.now() + timedelta(hours=24),
         )
+
+    def is_expired(self):
+        return timezone.now() > self.expires_at

@@ -26,6 +26,8 @@ class Enrollment(models.Model):
         related_name="enrollments",
     )
 
+    batch_code = models.CharField(max_length=30, null=True, blank=True)
+
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
@@ -41,5 +43,5 @@ class Enrollment(models.Model):
             models.Index(fields=["status"]),
         ]
 
-    def _str_(self):
+    def __str__(self):
         return f"{self.user.email} → {self.course.title}"

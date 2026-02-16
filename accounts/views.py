@@ -11,6 +11,9 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from rest_framework.exceptions import ValidationError
 from rest_framework_simplejwt.tokens import RefreshToken  # type: ignore
+from django.db.models import Prefetch
+from enrollments.models import Enrollment
+
 
 from accounts.audit import log_auth_event
 from accounts.models import (
@@ -38,17 +41,23 @@ class MeView(APIView):
     permission_classes = [IsAuthenticated, IsEmailVerified]
 
     def get(self, request):
-        return Response(UserMeSerializer(request.user).data)
 
-    def patch(self, request):
-        serializer = UserUpdateSerializer(
-            request.user,
-            data=request.data,
-            partial=True,
+        user = (
+            User.objects
+            .select_related("profile")
+            .prefetch_related(
+                Prefetch(
+                    "enrollments",
+                    queryset=Enrollment.objects
+                    .filter(status="ACTIVE")
+                    .select_related("course")
+                ),
+                "user_roles__role"
+            )
+            .get(id=request.user.id)
         )
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(UserMeSerializer(request.user).data)
+
+        return Response(UserMeSerializer(user).data)
 
 
 #  SIGNUP — PUBLIC, NO JWT
@@ -109,20 +118,32 @@ class LoginView(APIView):
 
         refresh = RefreshToken.for_user(user)
 
-        log_auth_event(
-            request,
-            AuthEvent.EVENT_LOGIN_SUCCESS,
-            user=user,
-        )
-
-        return Response(
-            {
-                "user": UserMeSerializer(user).data,
-                "refresh": str(refresh),
-                "access": str(refresh.access_token),
-            },
+        response = Response(
+            {"user": UserMeSerializer(user).data},
             status=status.HTTP_200_OK,
         )
+
+        response.set_cookie(
+            key="access",
+            value=str(refresh.access_token),
+            httponly=True,
+            secure=True,
+            samesite="None",
+            domain=".shikshacom.com",
+        )
+
+        response.set_cookie(
+            key="refresh",
+            value=str(refresh),
+            httponly=True,
+            secure=True,
+            samesite="None",
+            domain=".shikshacom.com",
+        )
+
+        log_auth_event(request, AuthEvent.EVENT_LOGIN_SUCCESS, user=user)
+
+        return response
 
 
 # ✅ EMAIL VERIFICATION — GET + REDIRECT
@@ -252,3 +273,20 @@ class ApproveTeacherRoleView(APIView):
             {"detail": "Teacher role approved."},
             status=status.HTTP_200_OK,
         )
+
+
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        response = Response({"detail": "Logged out."})
+
+        response.delete_cookie("access", domain=".shikshacom.com")
+        response.delete_cookie("refresh", domain=".shikshacom.com")
+
+        return response
+
+
+class IsProfileComplete(BasePermission):
+    def has_permission(self, request, view):
+        return request.user.profile.is_complete

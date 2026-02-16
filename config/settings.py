@@ -217,3 +217,14 @@ EMAIL_HOST_USER = "shikshacom.noreply@gmail.com"
 EMAIL_HOST_PASSWORD = "mmqzahmowuvveimj"
 
 DEFAULT_FROM_EMAIL = "Shiksha <noreply@shikshacom.com>"
+
+
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
+
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+SECURE_SSL_REDIRECT = True
