@@ -154,7 +154,7 @@ SIMPLE_JWT = {
 }
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "accounts.authentication.CookieJWTAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
@@ -187,10 +187,10 @@ CORS_ALLOWED_ORIGINS = [
     "https://app.shikshacom.com",
     "https://www.shikshacom.com",
 ]
-CORS_ALLOW_CREDENTIALS = False
+CORS_ALLOW_CREDENTIALS = True
 
 CORS_ALLOW_HEADERS = list(default_headers)+[
-    
+
     "authorization",
 ]
 

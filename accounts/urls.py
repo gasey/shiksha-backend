@@ -1,36 +1,20 @@
 from django.urls import path
 from .views import (
-    MeView,
     SignupView,
     LoginView,
+    LogoutView,
+    MeView,
     VerifyEmailView,
     ResendVerificationEmailView,
-    RequestTeacherRoleView,
-    ApproveTeacherRoleView,
+    RefreshView,
 )
 
 urlpatterns = [
-    path("me/", MeView.as_view(), name="me"),
-    path("signup/", SignupView.as_view(), name="signup"),
-    path("login/", LoginView.as_view(), name="login"),
-
-    #  Email verification # GET /auth/verify-email/?token=...
-    path("verify-email/", VerifyEmailView.as_view(), name="verify-email"),
-    path(
-        "resend-verification/",
-        ResendVerificationEmailView.as_view(),
-        name="resend-verification",
-    ),
-
-    #  Roles
-    path(
-        "roles/request-teacher/",
-        RequestTeacherRoleView.as_view(),
-        name="request-teacher",
-    ),
-    path(
-        "roles/approve-teacher/",
-        ApproveTeacherRoleView.as_view(),
-        name="approve-teacher",
-    ),
+    path("signup/", SignupView.as_view()),
+    path("login/", LoginView.as_view()),
+    path("logout/", LogoutView.as_view()),
+    path("me/", MeView.as_view()),
+    path("verify-email/", VerifyEmailView.as_view()),
+    path("resend-verification/", ResendVerificationEmailView.as_view()),
+    path("refresh/", RefreshView.as_view()),
 ]

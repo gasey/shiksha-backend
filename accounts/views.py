@@ -13,6 +13,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework_simplejwt.tokens import RefreshToken  # type: ignore
 from django.db.models import Prefetch
 from enrollments.models import Enrollment
+from rest_framework_simplejwt.exceptions import TokenError
 
 
 from accounts.audit import log_auth_event
@@ -290,3 +291,54 @@ class LogoutView(APIView):
 class IsProfileComplete(BasePermission):
     def has_permission(self, request, view):
         return request.user.profile.is_complete
+
+
+class RefreshView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        refresh_token = request.COOKIES.get("refresh")
+
+        if not refresh_token:
+            return Response(status=status.HTTP_401_UNAUTHORIZED)
+
+        try:
+            old_token = RefreshToken(refresh_token)
+
+            # Extract user_id safely from token payload
+            user_id = old_token["user_id"]
+
+            # Blacklist old refresh token (since rotation enabled)
+            old_token.blacklist()
+
+            # Get user safely
+            user = User.objects.get(id=user_id)
+
+            # Create new refresh token
+            new_refresh = RefreshToken.for_user(user)
+            new_access = str(new_refresh.access_token)
+
+            response = Response({"detail": "refreshed"})
+
+            response.set_cookie(
+                key="access",
+                value=new_access,
+                httponly=True,
+                secure=True,
+                samesite="None",
+                domain=".shikshacom.com",
+            )
+
+            response.set_cookie(
+                key="refresh",
+                value=str(new_refresh),
+                httponly=True,
+                secure=True,
+                samesite="None",
+                domain=".shikshacom.com",
+            )
+
+            return response
+
+        except (TokenError, User.DoesNotExist):
+            return Response(status=status.HTTP_401_UNAUTHORIZED)
