@@ -6,6 +6,8 @@ from enrollments.models import Enrollment
 from accounts.permissions import IsTeacher
 from .models import Course
 from .serializers import CourseSerializer
+from .models import Course, Subject
+from .serializers import CourseSerializer, SubjectSerializer
 
 # update
 from django.shortcuts import get_object_or_404
