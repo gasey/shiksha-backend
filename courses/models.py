@@ -61,7 +61,7 @@ class Chapter(models.Model):
         ordering = ["order"]
         unique_together = ("subject", "title")
 
-    def _str_(self):
+    def __str__(self):
         return self.title
 
 
@@ -82,5 +82,5 @@ class CourseDetail(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    def _str_(self):
+    def __str__(self):
         return f"Details of {self.course.title}"
