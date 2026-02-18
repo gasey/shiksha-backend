@@ -39,7 +39,7 @@ class Subject(models.Model):
         ordering = ["order"]
         unique_together = ("course", "name")
 
-    def _str_(self):
+    def __str__(self):
         return f"{self.course.title} → {self.name}"
 
 
