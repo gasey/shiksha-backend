@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import MyEnrolledCoursesView, CourseSubjectsView, CourseDashboardView
+from .views import MyEnrolledCoursesView, CourseSubjectsView
 # update
 from .views import (
     CreateCourseView,
