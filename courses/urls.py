@@ -15,4 +15,7 @@ urlpatterns = [
     # update
     path("courses/<uuid:course_id>/", UpdateCourseView.as_view()),
     path("courses/<uuid:course_id>/delete/", DeleteCourseView.as_view()),
+    path("my/", MyEnrolledCoursesView.as_view()),
+    path("<uuid:course_id>/subjects/", CourseSubjectsView.as_view()),
+
 ]

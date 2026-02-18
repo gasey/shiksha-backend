@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "enrollments",
     "payments",
+    "assignments",
 ]
 
 MIDDLEWARE = [
@@ -221,7 +222,7 @@ DEFAULT_FROM_EMAIL = "Shiksha <noreply@shikshacom.com>"
 
 
 MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "media"
+MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
 
 SECURE_BROWSER_XSS_FILTER = True
