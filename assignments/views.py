@@ -1,106 +1,107 @@
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
-from rest_framework import status
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
+from django.db.models import Prefetch
+
+from rest_framework import generics, status
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.exceptions import PermissionDenied
+
+from enrollments.models import Enrollment
+from enrollments.permissions import IsEnrolledInCourse
 
 from .models import Assignment, AssignmentSubmission
 from .serializers import (
     AssignmentListSerializer,
     AssignmentDetailSerializer,
 )
-from enrollments.models import Enrollment
 
 
-def student_enrolled_in_subject(user, subject_id):
-    return Enrollment.objects.filter(
-        user=user,
-        course__subjects__id=subject_id,
-        status="ACTIVE"
-    ).exists()
+# ==========================================
+# ASSIGNMENT DETAIL VIEW
+# ==========================================
 
-
-def student_enrolled_in_assignment(user, assignment):
-    return Enrollment.objects.filter(
-        user=user,
-        course=assignment.chapter.subject.course,
-        status="ACTIVE"
-    ).exists()
-
-
-class SubjectAssignmentsView(APIView):
+class AssignmentDetailView(generics.RetrieveAPIView):
+    serializer_class = AssignmentDetailSerializer
     permission_classes = [IsAuthenticated]
+    lookup_field = "id"
+    lookup_url_kwarg = "assignment_id"
 
-    def get(self, request, subject_id):
+    def get_queryset(self):
+        user = self.request.user
 
-        if not student_enrolled_in_subject(request.user, subject_id):
-            return Response(
-                {"detail": "Not enrolled."},
-                status=status.HTTP_403_FORBIDDEN
-            )
+        submission_prefetch = Prefetch(
+            "submissions",
+            queryset=AssignmentSubmission.objects.filter(student=user),
+            to_attr="user_submission_list",
+        )
 
-        assignments = (
+        queryset = (
             Assignment.objects
-            .filter(chapter__subject__id=subject_id)
-            .select_related("chapter")
+            .select_related("chapter__subject__course")
+            .prefetch_related(submission_prefetch)
         )
 
-        serializer = AssignmentListSerializer(
-            assignments,
-            many=True,
-            context={"request": request}
-        )
+        queryset = list(queryset)
 
+        for obj in queryset:
+            obj.user_submission = (
+                obj.user_submission_list[0]
+                if obj.user_submission_list
+                else None
+            )
+
+        return queryset
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+
+        # 🔒 Enrollment protection
+        if not Enrollment.objects.filter(
+            user=request.user,
+            course=instance.chapter.subject.course,
+            status="ACTIVE"
+        ).exists():
+            raise PermissionDenied("Not authorized.")
+
+        serializer = self.get_serializer(instance)
         return Response(serializer.data)
 
 
-class AssignmentDetailView(APIView):
-    permission_classes = [IsAuthenticated]
+# ==========================================
+# SUBMIT ASSIGNMENT VIEW
+# ==========================================
 
-    def get(self, request, assignment_id):
+class SubmitAssignmentView(generics.GenericAPIView):
+    permission_classes = [IsAuthenticated]
+    lookup_url_kwarg = "assignment_id"
+
+    def post(self, request, *args, **kwargs):
+        assignment_id = kwargs["assignment_id"]
+
         assignment = get_object_or_404(
             Assignment.objects.select_related(
                 "chapter__subject__course"
             ),
-            id=assignment_id
+            id=assignment_id,
         )
 
-        if not student_enrolled_in_assignment(request.user, assignment):
+        # 🔒 Enrollment protection
+        if not Enrollment.objects.filter(
+            user=request.user,
+            course=assignment.chapter.subject.course,
+            status="ACTIVE"
+        ).exists():
             return Response(
                 {"detail": "Not authorized."},
-                status=status.HTTP_403_FORBIDDEN
+                status=status.HTTP_403_FORBIDDEN,
             )
 
-        serializer = AssignmentDetailSerializer(
-            assignment,
-            context={"request": request}
-        )
-
-        return Response(serializer.data)
-
-
-class SubmitAssignmentView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request, assignment_id):
-
-        assignment = get_object_or_404(
-            Assignment.objects.select_related(
-                "chapter__subject__course"
-            ),
-            id=assignment_id
-        )
-
-        if not student_enrolled_in_assignment(request.user, assignment):
-            return Response(
-                {"detail": "Not authorized."},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
-        if assignment.is_expired:
+        # ⛔ Expired check
+        if assignment.due_date < timezone.now():
             return Response(
                 {"detail": "Assignment expired."},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         file = request.FILES.get("file")
@@ -108,7 +109,7 @@ class SubmitAssignmentView(APIView):
         if not file:
             return Response(
                 {"detail": "File required."},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         AssignmentSubmission.objects.update_or_create(
@@ -119,5 +120,42 @@ class SubmitAssignmentView(APIView):
 
         return Response(
             {"detail": "Submission successful."},
-            status=status.HTTP_200_OK
+            status=status.HTTP_200_OK,
         )
+
+
+# ==========================================
+# COURSE ASSIGNMENTS LIST VIEW
+# ==========================================
+
+class CourseAssignmentsView(generics.ListAPIView):
+    serializer_class = AssignmentListSerializer
+    permission_classes = [IsAuthenticated, IsEnrolledInCourse]
+
+    def get_queryset(self):
+        course_id = self.kwargs["course_id"]
+        user = self.request.user
+
+        submission_prefetch = Prefetch(
+            "submissions",
+            queryset=AssignmentSubmission.objects.filter(student=user),
+            to_attr="user_submission_list",
+        )
+
+        queryset = (
+            Assignment.objects
+            .filter(chapter__subject__course__id=course_id)
+            .select_related("chapter__subject__course")
+            .prefetch_related(submission_prefetch)
+        )
+
+        queryset = list(queryset)
+
+        for obj in queryset:
+            obj.user_submission = (
+                obj.user_submission_list[0]
+                if obj.user_submission_list
+                else None
+            )
+
+        return queryset
