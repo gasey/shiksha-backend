@@ -211,3 +211,104 @@ class SubmitQuizView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class QuizDetailView(APIView):
+    permission_classes = [
+        IsAuthenticated,
+        IsEmailVerified,
+    ]
+
+    def get(self, request, pk):
+        quiz = get_object_or_404(
+            Quiz.objects
+            .select_related(
+                "subject",
+                "subject__course",
+                "created_by",
+                "created_by__profile",
+            )
+            .prefetch_related(
+                "questions__choices"
+            ),
+            pk=pk,
+            is_published=True,
+        )
+
+        # Enrollment check
+        if not Enrollment.objects.filter(
+            user=request.user,
+            course=quiz.subject.course,
+            status=Enrollment.STATUS_ACTIVE,
+        ).exists():
+            raise ValidationError("Not enrolled in this course.")
+
+        # Expiry check
+        if quiz.due_date <= timezone.now():
+            raise ValidationError("Quiz expired.")
+
+        serializer = QuizDetailSerializer(
+            quiz,
+            context={"request": request},
+        )
+
+        return Response(serializer.data)
+
+
+class QuizResultView(APIView):
+    permission_classes = [
+        IsAuthenticated,
+        IsEmailVerified,
+    ]
+
+    def get(self, request, pk):
+        quiz = get_object_or_404(
+            Quiz.objects.select_related(
+                "subject",
+                "subject__course",
+                "created_by",
+                "created_by__profile",
+            ),
+            pk=pk,
+        )
+
+        try:
+            attempt = QuizAttempt.objects.select_related(
+                "quiz"
+            ).prefetch_related(
+                "answers__question",
+                "answers__selected_choice",
+            ).get(
+                quiz=quiz,
+                student=request.user,
+                status=QuizAttempt.STATUS_SUBMITTED,
+            )
+        except QuizAttempt.DoesNotExist:
+            raise ValidationError("Quiz not submitted yet.")
+
+        result_questions = []
+
+        for answer in attempt.answers.all():
+            correct_choice = answer.question.choices.get(is_correct=True)
+
+            result_questions.append({
+                "id": answer.question.id,
+                "text": answer.question.text,
+                "selected_choice": answer.selected_choice.text,
+                "correct_choice": correct_choice.text,
+                "is_correct": answer.is_correct,
+            })
+
+        data = {
+            "quiz_id": quiz.id,
+            "title": quiz.title,
+            "subject_name": quiz.subject.name,
+            "teacher_name": quiz.created_by.profile.full_name,
+            "total_marks": quiz.total_marks,
+            "score": attempt.score,
+            "submitted_at": attempt.submitted_at,
+            "questions": result_questions,
+        }
+
+        serializer = QuizResultSerializer(data)
+        return Response(serializer.data)

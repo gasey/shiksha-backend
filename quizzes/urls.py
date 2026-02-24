@@ -7,6 +7,8 @@ from .views import (
     StudentDashboardView,
     StartQuizView,
     SubmitQuizView,
+    QuizDetailView,
+    QuizResultView,  # ✅ ADD THIS
 )
 
 urlpatterns = [
@@ -53,5 +55,16 @@ urlpatterns = [
         "quizzes/<uuid:pk>/submit/",
         SubmitQuizView.as_view(),
         name="submit-quiz",
+    ),
+
+    path(
+        "quizzes/<uuid:pk>/",
+        QuizDetailView.as_view(),
+        name="quiz-detail",
+    ),
+    path(
+        "quizzes/<uuid:pk>/result/",
+        QuizResultView.as_view(),
+        name="quiz-result",
     ),
 ]
