@@ -321,7 +321,7 @@ class StudentQuizSubjectsView(APIView):
     ]
 
     def get(self, request):
-        subjects = (
+        quizzes = (
             Quiz.objects
             .filter(
                 is_published=True,
@@ -330,29 +330,21 @@ class StudentQuizSubjectsView(APIView):
             )
             .select_related(
                 "subject",
-                "subject__course",
                 "created_by",
                 "created_by__profile",
             )
-            .distinct("subject")
         )
 
-        data = []
+        subjects_map = {}
 
-        seen_subjects = set()
-
-        for quiz in subjects:
+        for quiz in quizzes:
             subject = quiz.subject
 
-            if subject.id in seen_subjects:
-                continue
+            if subject.id not in subjects_map:
+                subjects_map[subject.id] = {
+                    "id": subject.id,
+                    "subject": subject.name,
+                    "teacher": quiz.created_by.profile.full_name,
+                }
 
-            seen_subjects.add(subject.id)
-
-            data.append({
-                "id": subject.id,
-                "subject": subject.name,
-                "teacher": quiz.created_by.profile.full_name,
-            })
-
-        return Response(data)
+        return Response(list(subjects_map.values()))
