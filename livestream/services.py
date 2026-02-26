@@ -1,5 +1,5 @@
 from django.conf import settings
-from livekit.api import AccessToken, VideoGrant
+from livekit.api import AccessToken, VideoGrants
 
 
 def generate_livekit_token(user, session, is_teacher=False):
@@ -8,16 +8,16 @@ def generate_livekit_token(user, session, is_teacher=False):
         settings.LIVEKIT_API_SECRET,
     )
 
-    token.identity = str(user.id)
-    token.name = user.email
+    token.with_identity(str(user.id))
+    token.with_name(user.email)
 
-    grant = VideoGrant(
-        room=session.room_name,
+    grants = VideoGrants(
         room_join=True,
+        room=session.room_name,
         can_publish=is_teacher,
         can_subscribe=True,
     )
 
-    token.add_grant(grant)
+    token.with_grants(grants)
 
     return token.to_jwt()
