@@ -74,6 +74,10 @@ class LiveSessionCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "This session overlaps with an existing session."
             )
+        print("Logged in user:", user.email)
+        print("User ID:", user.id)
+        print("Subject teachers:", list(
+            subject.subject_teachers.values_list("teacher__email", flat=True)))
 
         self._validated_subject = subject
         return data
