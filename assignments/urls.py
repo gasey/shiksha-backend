@@ -3,6 +3,11 @@ from .views import (
     CourseAssignmentsView,
     AssignmentDetailView,
     SubmitAssignmentView,
+    TeacherCreateAssignmentView,
+    TeacherUpdateAssignmentView,
+    TeacherDeleteAssignmentView,
+    TeacherSubjectAssignmentsView,
+    TeacherAssignmentSubmissionsView
 )
 
 urlpatterns = [
@@ -17,5 +22,25 @@ urlpatterns = [
     path(
         "<uuid:assignment_id>/submit/",
         SubmitAssignmentView.as_view(),
+    ),
+    path(
+        "teacher/create/",
+        TeacherCreateAssignmentView.as_view(),
+    ),
+    path(
+        "teacher/<uuid:assignment_id>/edit/",
+        TeacherUpdateAssignmentView.as_view(),
+    ),
+    path(
+        "teacher/<uuid:assignment_id>/delete/",
+        TeacherDeleteAssignmentView.as_view(),
+    ),
+    path(
+        "teacher/subject/<uuid:subject_id>/",
+        TeacherSubjectAssignmentsView.as_view(),
+    ),
+    path(
+        "teacher/<uuid:assignment_id>/submissions/",
+        TeacherAssignmentSubmissionsView.as_view(),
     ),
 ]

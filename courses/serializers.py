@@ -4,6 +4,7 @@ from .models import Subject, Course
 
 class SubjectSerializer(serializers.ModelSerializer):
     teachers = serializers.SerializerMethodField()
+    chapters = serializers.SerializerMethodField()   # ✅ added
 
     class Meta:
         model = Subject
@@ -12,6 +13,7 @@ class SubjectSerializer(serializers.ModelSerializer):
             "name",
             "order",
             "teachers",
+            "chapters",   # ✅ added
         )
 
     def get_teachers(self, obj):
@@ -38,6 +40,17 @@ class SubjectSerializer(serializers.ModelSerializer):
             })
 
         return data
+
+    # ✅ NEW METHOD
+    def get_chapters(self, obj):
+        return [
+            {
+                "id": str(ch.id),
+                "title": ch.title,
+                "order": ch.order,
+            }
+            for ch in obj.chapters.all().order_by("order")
+        ]
 
 
 class CourseSerializer(serializers.ModelSerializer):
