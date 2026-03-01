@@ -27,21 +27,11 @@ from .serializers import (
 # =====================================================
 
 class CreateQuizView(APIView):
-    permission_classes = [IsAuthenticated, IsEmailVerified]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        if not request.user.has_role("teacher"):
-            raise ValidationError("Only teachers can create quizzes.")
-
-        subject_id = request.data.get("subject")
-        if not subject_id:
-            raise ValidationError("Subject is required.")
-
-        if not SubjectTeacher.objects.filter(
-            subject_id=subject_id,
-            teacher=request.user
-        ).exists():
-            raise ValidationError("You are not assigned to this subject.")
+        if not request.user.has_role("TEACHER"):
+            raise PermissionDenied("Only teachers allowed.")
 
         serializer = QuizCreateSerializer(
             data=request.data,
@@ -57,16 +47,16 @@ class CreateQuizView(APIView):
 
 
 class AddQuestionView(APIView):
-    permission_classes = [IsAuthenticated, IsEmailVerified]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, pk):
+        if not request.user.has_role("TEACHER"):
+            raise PermissionDenied("Only teachers allowed.")
+
         quiz = get_object_or_404(Quiz, pk=pk)
 
-        if not request.user.has_role("teacher"):
-            raise ValidationError("Only teachers allowed.")
-
         if quiz.created_by != request.user:
-            raise ValidationError("Not authorized for this quiz.")
+            raise PermissionDenied("Not authorized for this quiz.")
 
         if quiz.is_published:
             raise ValidationError("Cannot modify published quiz.")
@@ -85,24 +75,26 @@ class AddQuestionView(APIView):
 
 
 class PublishQuizView(APIView):
-    permission_classes = [IsAuthenticated, IsEmailVerified]
+    permission_classes = [IsAuthenticated]
 
     def patch(self, request, pk):
+        if not request.user.has_role("TEACHER"):
+            raise PermissionDenied("Only teachers allowed.")
+
         quiz = get_object_or_404(Quiz, pk=pk)
 
-        if not request.user.has_role("teacher"):
-            raise ValidationError("Only teachers allowed.")
-
         if quiz.created_by != request.user:
-            raise ValidationError("Not authorized.")
+            raise PermissionDenied("Not authorized.")
 
         if quiz.is_published:
             raise ValidationError("Quiz already published.")
 
-        if quiz.questions.count() == 0:
+        if not quiz.questions.exists():
             raise ValidationError("Cannot publish empty quiz.")
 
-        total_marks = sum(q.marks for q in quiz.questions.all())
+        total_marks = quiz.questions.aggregate(
+            total=models.Sum("marks")
+        )["total"] or 0
 
         quiz.total_marks = total_marks
         quiz.is_published = True
@@ -113,10 +105,10 @@ class PublishQuizView(APIView):
             status=status.HTTP_200_OK,
         )
 
-
 # =====================================================
 # STUDENT VIEWS
 # =====================================================
+
 
 class StudentDashboardView(APIView):
     permission_classes = [IsAuthenticated, IsEmailVerified]
@@ -332,3 +324,75 @@ class StudentQuizSubjectsView(APIView):
                 }
 
         return Response(list(subjects_map.values()))
+
+
+class TeacherSubjectQuizListView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = QuizDashboardSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        subject_id = self.kwargs["subject_id"]
+
+        if not user.has_role("TEACHER"):
+            raise PermissionDenied("Only teachers allowed.")
+
+        subject = get_object_or_404(Subject, id=subject_id)
+
+        if not SubjectTeacher.objects.filter(
+            subject=subject,
+            teacher=user
+        ).exists():
+            raise PermissionDenied("Not assigned to this subject.")
+
+        return Quiz.objects.filter(
+            subject=subject
+        ).order_by("-created_at")
+
+
+class TeacherDeleteQuizView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk):
+        if not request.user.has_role("TEACHER"):
+            raise PermissionDenied("Only teachers allowed.")
+
+        quiz = get_object_or_404(Quiz, pk=pk)
+
+        if quiz.created_by != request.user:
+            raise PermissionDenied("Not authorized.")
+
+        if quiz.attempts.exists():
+            raise ValidationError(
+                "Cannot delete quiz with attempts."
+            )
+
+        quiz.delete()
+
+        return Response(
+            {"detail": "Quiz deleted successfully."},
+            status=status.HTTP_204_NO_CONTENT,
+        )
+
+
+class TeacherQuizAttemptsView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = QuizResultSerializer
+
+    def get_queryset(self):
+        if not self.request.user.has_role("TEACHER"):
+            raise PermissionDenied("Only teachers allowed.")
+
+        quiz = get_object_or_404(
+            Quiz.objects.prefetch_related(
+                "attempts__student"
+            ),
+            pk=self.kwargs["pk"]
+        )
+
+        if quiz.created_by != self.request.user:
+            raise PermissionDenied("Not authorized.")
+
+        return quiz.attempts.filter(
+            status=QuizAttempt.STATUS_SUBMITTED
+        )

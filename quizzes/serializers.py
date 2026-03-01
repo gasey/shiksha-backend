@@ -44,15 +44,13 @@ class QuestionCreateSerializer(serializers.ModelSerializer):
         fields = ["id", "text", "marks", "order", "choices"]
         read_only_fields = ["id"]
 
-    def validate_choices(self, value):
-        if len(value) < 2:
-            raise ValidationError("At least two choices required.")
-        return value
-
     def validate(self, attrs):
         choices = attrs.get("choices", [])
-        correct_count = sum(1 for c in choices if c.get("is_correct"))
 
+        if len(choices) < 2:
+            raise ValidationError("At least two choices required.")
+
+        correct_count = sum(1 for c in choices if c.get("is_correct"))
         if correct_count != 1:
             raise ValidationError("Exactly one correct answer required.")
 
@@ -61,18 +59,17 @@ class QuestionCreateSerializer(serializers.ModelSerializer):
     @transaction.atomic
     def create(self, validated_data):
         choices_data = validated_data.pop("choices")
-        quiz = self.context.get("quiz")
+        quiz = self.context["quiz"]
 
         question = Question.objects.create(
             quiz=quiz,
             **validated_data
         )
 
-        for choice_data in choices_data:
-            Choice.objects.create(
-                question=question,
-                **choice_data
-            )
+        Choice.objects.bulk_create([
+            Choice(question=question, **choice)
+            for choice in choices_data
+        ])
 
         return question
 
@@ -92,21 +89,20 @@ class QuizCreateSerializer(serializers.ModelSerializer):
             "description",
             "due_date",
             "time_limit_minutes",
-            "is_published",
         ]
         read_only_fields = ["id"]
 
     def validate_subject(self, subject):
         user = self.context["request"].user
 
-        if not user.has_role("teacher"):
-            raise ValidationError("Only teachers can create quizzes.")
+        if not user.has_role("TEACHER"):
+            raise PermissionDenied("Only teachers allowed.")
 
         if not SubjectTeacher.objects.filter(
             subject=subject,
             teacher=user
         ).exists():
-            raise ValidationError("You are not assigned to this subject.")
+            raise PermissionDenied("You are not assigned to this subject.")
 
         return subject
 
@@ -121,10 +117,10 @@ class QuizCreateSerializer(serializers.ModelSerializer):
             **validated_data
         )
 
-
 # =====================================================
 # STUDENT DASHBOARD SERIALIZER
 # =====================================================
+
 
 class QuizDashboardSerializer(serializers.ModelSerializer):
     subject_name = serializers.CharField(source="subject.name", read_only=True)

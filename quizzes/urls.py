@@ -14,63 +14,20 @@ from .views import (
 
 urlpatterns = [
 
-    # -------------------------------
-    # 🧑‍🏫 Teacher Routes
-    # -------------------------------
+    # Teacher
+    path("teacher/quizzes/", CreateQuizView.as_view()),
+    path("teacher/quizzes/<uuid:pk>/questions/", AddQuestionView.as_view()),
+    path("teacher/quizzes/<uuid:pk>/publish/", PublishQuizView.as_view()),
+    path("teacher/quizzes/<uuid:pk>/delete/", TeacherDeleteQuizView.as_view()),
+    path("teacher/subjects/<uuid:subject_id>/quizzes/",
+         TeacherSubjectQuizListView.as_view()),
+    path("teacher/quizzes/<uuid:pk>/attempts/",
+         TeacherQuizAttemptsView.as_view()),
 
-    path(
-        "quizzes/",
-        CreateQuizView.as_view(),
-        name="create-quiz",
-    ),
-
-    path(
-        "quizzes/<uuid:pk>/questions/",
-        AddQuestionView.as_view(),
-        name="add-question",
-    ),
-
-    path(
-        "quizzes/<uuid:pk>/publish/",
-        PublishQuizView.as_view(),
-        name="publish-quiz",
-    ),
-
-    # -------------------------------
-    # 🎓 Student Routes
-    # -------------------------------
-
-    path(
-        "student/quizzes/",
-        StudentDashboardView.as_view(),
-        name="student-dashboard",
-    ),
-
-    path(
-        "quizzes/<uuid:pk>/start/",
-        StartQuizView.as_view(),
-        name="start-quiz",
-    ),
-
-    path(
-        "quizzes/<uuid:pk>/submit/",
-        SubmitQuizView.as_view(),
-        name="submit-quiz",
-    ),
-
-    path(
-        "quizzes/<uuid:pk>/",
-        QuizDetailView.as_view(),
-        name="quiz-detail",
-    ),
-    path(
-        "quizzes/<uuid:pk>/result/",
-        QuizResultView.as_view(),
-        name="quiz-result",
-    ),
-    path(
-        "student/quiz-subjects/",
-        StudentQuizSubjectsView.as_view(),
-        name="student-quiz-subjects",
-    ),
+    # Student
+    path("student/quizzes/", StudentDashboardView.as_view()),
+    path("quizzes/<uuid:pk>/start/", StartQuizView.as_view()),
+    path("quizzes/<uuid:pk>/submit/", SubmitQuizView.as_view()),
+    path("quizzes/<uuid:pk>/", QuizDetailView.as_view()),
+    path("quizzes/<uuid:pk>/result/", QuizResultView.as_view()),
 ]

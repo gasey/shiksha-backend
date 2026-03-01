@@ -30,20 +30,23 @@ class Quiz(models.Model):
     time_limit_minutes = models.PositiveIntegerField(null=True, blank=True)
 
     total_marks = models.PositiveIntegerField(default=0)
-
     is_published = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["subject", "is_published"]),
+            models.Index(fields=["subject"]),
+            models.Index(fields=["is_published"]),
+            models.Index(fields=["due_date"]),
         ]
 
     def __str__(self):
         return f"{self.title} ({self.subject.name})"
 
+    @property
     def is_expired(self):
         return timezone.now() > self.due_date
 
