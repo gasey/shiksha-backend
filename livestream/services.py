@@ -1,16 +1,18 @@
-from datetime import timedelta
 from livekit.api import AccessToken, VideoGrants
-from django.conf import settings
+from datetime import timedelta
 
 
 def generate_livekit_token(user, session, is_teacher=False):
     token = AccessToken(
         settings.LIVEKIT_API_KEY,
         settings.LIVEKIT_API_SECRET,
-        identity=str(user.id),
-        name=user.email,
-        ttl=timedelta(minutes=10),   # 👈 IMPORTANT
     )
+
+    token.with_identity(str(user.id))
+    token.with_name(user.email)
+
+    # Explicit short expiration (important)
+    token.with_ttl(timedelta(minutes=10))
 
     grants = VideoGrants(
         room_join=True,
