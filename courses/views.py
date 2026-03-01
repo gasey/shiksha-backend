@@ -249,46 +249,35 @@ class TeacherMyClassesView(APIView):
     def get(self, request):
         user = request.user
 
-        # 🔐 Role protection
+        # 🔐 Only teachers
         if not user.has_role(Role.TEACHER):
             return Response(
                 {"detail": "Only teachers allowed."},
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        # Get subjects assigned to teacher
-        subject_assignments = (
-            SubjectTeacher.objects
-            .filter(teacher=user)
-            .select_related("subject__course")
+        subjects = (
+            Subject.objects
+            .filter(subject_teachers__teacher=user)
+            .select_related("course")
+            .distinct()
         )
 
         response_data = []
 
-        for assignment in subject_assignments:
-            subject = assignment.subject
-            course = subject.course
+        for subject in subjects:
+            # Count active students in that course
+            students_count = Enrollment.objects.filter(
+                course=subject.course,
+                status=Enrollment.STATUS_ACTIVE
+            ).count()
 
-            # Group enrollments by batch_code
-            batches = (
-                Enrollment.objects
-                .filter(
-                    course=course,
-                    status=Enrollment.STATUS_ACTIVE
-                )
-                .exclude(batch_code__isnull=True)
-                .exclude(batch_code="")
-                .values("batch_code")
-                .annotate(students_count=Count("id"))
-            )
-
-            for batch in batches:
-                response_data.append({
-                    "subject_id": str(subject.id),
-                    "subject_name": subject.name,
-                    "course_title": course.title,
-                    "batch_code": batch["batch_code"],
-                    "students_count": batch["students_count"],
-                })
+            response_data.append({
+                "subject_id": str(subject.id),
+                "subject_name": subject.name,
+                "course_id": str(subject.course.id),
+                "course_title": subject.course.title,
+                "students_count": students_count,
+            })
 
         return Response(response_data)
