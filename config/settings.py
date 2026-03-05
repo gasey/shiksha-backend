@@ -6,7 +6,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 'config.wsgi.application'
 
-
+load_dotenv(BASE_DIR / ".env")
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
