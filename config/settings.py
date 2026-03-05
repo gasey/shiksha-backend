@@ -1,7 +1,7 @@
 from pathlib import Path
 import os
 from datetime import timedelta
-from corsheaders.defaults import default_headers
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 'config.wsgi.application'
@@ -156,10 +156,3 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 SECURE_SSL_REDIRECT = True
-
-# Cookie domain settings
-SESSION_COOKIE_DOMAIN = ".shikshacom.com"   # Share across subdomains
-CSRF_COOKIE_DOMAIN = ".shikshacom.com"
-
-SESSION_COOKIE_SAMESITE = "None"
-CSRF_COOKIE_SAMESITE = "None"
