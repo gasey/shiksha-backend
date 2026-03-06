@@ -20,11 +20,11 @@ def assignment_created(sender, instance, created, **kwargs):
     students = Enrollment.objects.filter(
         course=course,
         status=Enrollment.STATUS_ACTIVE
-    ).values_list("user", flat=True)
+    ).select_related("user")
 
-    for student_id in students:
+    for enrollment in students:
         create_activity(
-            user=student_id,
+            user=enrollment.user,
             obj=instance,
             type=Activity.TYPE_ASSIGNMENT,
             title=f"New assignment: {instance.title}",
@@ -43,11 +43,11 @@ def quiz_published(sender, instance, created, **kwargs):
     students = Enrollment.objects.filter(
         course=course,
         status=Enrollment.STATUS_ACTIVE
-    ).values_list("user", flat=True)
+    ).select_related("user")
 
-    for student_id in students:
+    for enrollment in students:
         create_activity(
-            user=student_id,
+            user=enrollment.user,
             obj=instance,
             type=Activity.TYPE_QUIZ,
             title=f"Quiz available: {instance.title}",
@@ -66,11 +66,11 @@ def session_created(sender, instance, created, **kwargs):
     students = Enrollment.objects.filter(
         course=course,
         status=Enrollment.STATUS_ACTIVE
-    ).values_list("user", flat=True)
+    ).select_related("user")
 
-    for student_id in students:
+    for enrollment in students:
         create_activity(
-            user=student_id,
+            user=enrollment.user,
             obj=instance,
             type=Activity.TYPE_SESSION,
             title=f"Live session scheduled: {instance.title}",
