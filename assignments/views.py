@@ -304,7 +304,7 @@ class TeacherSubjectAssignmentsView(generics.ListAPIView):
         if not subject.subject_teachers.filter(teacher=user).exists():
             raise PermissionDenied("Not assigned to this subject.")
 
-        queryset = (
+        return (
             Assignment.objects
             .filter(chapter__subject=subject)
             .select_related("chapter")
@@ -313,8 +313,6 @@ class TeacherSubjectAssignmentsView(generics.ListAPIView):
             )
             .order_by("-created_at")
         )
-
-        return queryset
 
 
 class TeacherAssignmentSubmissionsView(generics.ListAPIView):
