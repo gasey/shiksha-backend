@@ -5,6 +5,12 @@ from django.conf import settings
 
 class SessionRecording(models.Model):
 
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False
+    )
+
     subject = models.ForeignKey(
         "courses.Subject",
         on_delete=models.CASCADE,
