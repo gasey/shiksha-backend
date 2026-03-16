@@ -57,6 +57,14 @@ class DeleteRecordingView(APIView):
 
         recording = get_object_or_404(SessionRecording, id=recording_id)
 
+        if not recording.subject.subject_teachers.filter(
+            teacher=request.user
+        ).exists():
+            return Response(
+                {"detail": "Not allowed."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         recording.delete()
 
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -101,12 +109,18 @@ class SaveRecordingView(APIView):
 
         subject = get_object_or_404(Subject, id=subject_id)
 
+        # 🔐 ensure teacher is assigned to subject
+        if not subject.subject_teachers.filter(teacher=request.user).exists():
+            return Response(
+                {"detail": "You are not assigned to this subject."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         title = request.data.get("title")
         session_date = request.data.get("session_date")
         timing = request.data.get("duration")
         video_id = request.data.get("video_id")
 
-        # convert timing string to seconds (optional simple parser)
         duration_seconds = None
 
         if timing:
@@ -118,9 +132,7 @@ class SaveRecordingView(APIView):
                 start_time = datetime.strptime(start.strip(), "%I:%M %p")
                 end_time = datetime.strptime(end.strip(), "%I:%M %p")
 
-                duration_seconds = int(
-                    (end_time - start_time).total_seconds()
-                )
+                duration_seconds = int((end_time - start_time).total_seconds())
 
             except Exception:
                 duration_seconds = None
