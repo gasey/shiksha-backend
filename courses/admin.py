@@ -1,5 +1,6 @@
 from django.contrib import admin
 from .models import Course, Subject, Chapter, SubjectTeacher
+from .models_recordings import SessionRecording
 
 
 # =========================
@@ -23,6 +24,23 @@ class SubjectTeacherInline(admin.TabularInline):
 
 
 # =========================
+# SESSION RECORDING INLINE
+# =========================
+
+class SessionRecordingInline(admin.TabularInline):
+    model = SessionRecording
+    extra = 1
+    fields = (
+        "title",
+        "chapter",
+        "session_date",
+        "duration_seconds",
+        "bunny_video_id",
+        "is_published",
+    )
+
+
+# =========================
 # SUBJECT ADMIN
 # =========================
 
@@ -32,7 +50,11 @@ class SubjectAdmin(admin.ModelAdmin):
     list_filter = ("course",)
     ordering = ("course", "order")
     search_fields = ("name", "course__title")
-    inlines = [SubjectTeacherInline]
+
+    inlines = [
+        SubjectTeacherInline,
+        SessionRecordingInline,  # 👈 recordings appear inside subject
+    ]
 
     def get_teachers(self, obj):
         return ", ".join(
@@ -51,3 +73,23 @@ class ChapterAdmin(admin.ModelAdmin):
     list_display = ("title", "subject", "order")
     list_filter = ("subject",)
     ordering = ("subject", "order")
+
+
+# =========================
+# SESSION RECORDING ADMIN
+# =========================
+
+@admin.register(SessionRecording)
+class SessionRecordingAdmin(admin.ModelAdmin):
+    list_display = (
+        "title",
+        "subject",
+        "chapter",
+        "session_date",
+        "is_published",
+        "uploaded_by",
+    )
+    list_filter = ("subject", "is_published")
+    search_fields = ("title", "subject__name")
+    ordering = ("-session_date",)
+    readonly_fields = ("created_at",)

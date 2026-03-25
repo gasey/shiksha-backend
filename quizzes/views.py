@@ -25,6 +25,7 @@ from .serializers import (
     QuizDetailSerializer,
     QuizResultSerializer,
     TeacherQuizAnalyticsSerializer,
+    TeacherQuizAttemptSerializer,
 
 )
 
@@ -234,7 +235,13 @@ class QuizDetailView(APIView):
             is_published=True,
         )
 
-        if not Enrollment.objects.filter(
+        # ✅ Allow teacher who created quiz
+        if request.user.has_role("TEACHER"):
+            if quiz.created_by != request.user:
+                raise PermissionDenied("Not authorized for this quiz.")
+
+        # ✅ Allow enrolled students
+        elif not Enrollment.objects.filter(
             user=request.user,
             course=quiz.subject.course,
             status=Enrollment.STATUS_ACTIVE,
@@ -286,6 +293,7 @@ class QuizResultView(APIView):
                 "selected_choice": answer.selected_choice.text,
                 "correct_choice": correct_choice.text if correct_choice else "",
                 "is_correct": answer.is_correct,
+                "explanation": answer.question.explanation,
             })
 
         data = {
@@ -387,27 +395,7 @@ class TeacherDeleteQuizView(APIView):
         )
 
 
-class TeacherQuizAttemptsView(generics.ListAPIView):
-    permission_classes = [IsAuthenticated]
-    serializer_class = QuizResultSerializer
 
-    def get_queryset(self):
-        if not self.request.user.has_role("TEACHER"):
-            raise PermissionDenied("Only teachers allowed.")
-
-        quiz = get_object_or_404(
-            Quiz.objects.prefetch_related(
-                "attempts__student"
-            ),
-            pk=self.kwargs["pk"]
-        )
-
-        if quiz.created_by != self.request.user:
-            raise PermissionDenied("Not authorized.")
-
-        return quiz.attempts.filter(
-            status=QuizAttempt.STATUS_SUBMITTED
-        )
 
 
 class TeacherDeleteQuizView(APIView):
@@ -481,6 +469,7 @@ class TeacherDeleteQuizView(APIView):
 
 class TeacherQuizAttemptsView(generics.ListAPIView):
     permission_classes = [IsAuthenticated, IsEmailVerified]
+    serializer_class = TeacherQuizAttemptSerializer   
 
     def get_queryset(self):
         user = self.request.user
@@ -494,7 +483,7 @@ class TeacherQuizAttemptsView(generics.ListAPIView):
             id=quiz_id
         )
 
-        # ensure teacher owns subject
+
         if not SubjectTeacher.objects.filter(
             subject=quiz.subject,
             teacher=user
@@ -507,3 +496,43 @@ class TeacherQuizAttemptsView(generics.ListAPIView):
             .select_related("student", "student__profile")
             .order_by("-submitted_at")
         )
+class TeacherQuizAttemptDetailView(APIView):
+    permission_classes = [IsAuthenticated, IsEmailVerified]
+
+    def get(self, request, pk):
+        attempt = get_object_or_404(
+            QuizAttempt.objects.prefetch_related(
+                "answers__question__choices",
+                "answers__selected_choice",
+            ),
+            id=pk
+        )
+
+        # ensure teacher owns this quiz
+        if not SubjectTeacher.objects.filter(
+            subject=attempt.quiz.subject,
+            teacher=request.user
+        ).exists():
+            raise PermissionDenied("Not authorized.")
+
+        result_questions = []
+
+        for answer in attempt.answers.all():
+            correct_choice = answer.question.choices.filter(
+                is_correct=True
+            ).first()
+
+            result_questions.append({
+                "question": answer.question.text,
+                "options": [c.text for c in answer.question.choices.all()],
+                "selected": answer.selected_choice.text,
+                "correct": correct_choice.text if correct_choice else "",
+            })
+
+        return Response({
+            "student_name": attempt.student.profile.full_name,
+            "score": attempt.score,
+            "total": attempt.quiz.total_marks,
+            "submitted_at": attempt.submitted_at,
+            "questions": result_questions,
+        })

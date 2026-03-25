@@ -12,6 +12,7 @@ urlpatterns = [
     path("api/livestream/", include("livestream.urls")),
     path("api/dashboard/", include("dashboard.urls")),
     path("api/activity/", include("activity.urls")),
+    path("api/materials/", include("materials.urls")),
 
 ]
 

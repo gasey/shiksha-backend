@@ -342,3 +342,34 @@ class TeacherAssignmentSubmissionsView(generics.ListAPIView):
             .select_related("student", "student__profile")
             .order_by("-submitted_at")
         )
+
+
+class SubjectAssignmentsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, subject_id):
+
+        assignments = Assignment.objects.filter(
+            chapter__subject_id=subject_id
+        )
+
+        data = []
+
+        for assignment in assignments:
+
+            submission = AssignmentSubmission.objects.filter(
+                assignment=assignment,
+                student=request.user
+            ).first()
+
+            status = "SUBMITTED" if submission else "PENDING"
+
+            data.append({
+                "id": assignment.id,
+                "title": assignment.title,
+                "due_date": assignment.due_date,
+                "status": status,
+                "subject": assignment.chapter.subject.name
+            })
+
+        return Response(data)
