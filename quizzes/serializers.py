@@ -379,6 +379,10 @@ class TeacherQuizAnalyticsSerializer(serializers.ModelSerializer):
         source="subject.course.title",
         read_only=True
     )
+    teacher_name = serializers.CharField(
+        source="created_by.email",
+        read_only=True
+    )
 
     total_attempts = serializers.IntegerField(read_only=True)
     average_score = serializers.FloatField(read_only=True)
@@ -394,8 +398,10 @@ class TeacherQuizAnalyticsSerializer(serializers.ModelSerializer):
             "id",
             "title",
             "subject_name",
+             "teacher_name",
             "course_title",
             "due_date",
+            "created_at",
             "is_published",
             "is_expired",
             "total_attempts",
