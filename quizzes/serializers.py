@@ -390,10 +390,6 @@ class TeacherQuizAnalyticsSerializer(serializers.ModelSerializer):
         source="subject.course.title",
         read_only=True
     )
-    teacher_name = serializers.CharField(
-        source="created_by.email",
-        read_only=True
-    )
 
     questions_count = serializers.SerializerMethodField()
 
@@ -412,10 +408,8 @@ class TeacherQuizAnalyticsSerializer(serializers.ModelSerializer):
             "title",
             "created_at",        
             "subject_name",
-             "teacher_name",
             "course_title",
             "due_date",
-            "created_at",
             "is_published",
             "is_expired",
             "questions_count",  
