@@ -65,6 +65,8 @@ class ListThreadsView(APIView):
         sort = request.query_params.get("sort", "newest")
         if sort == "oldest":
             qs = qs.order_by("created_at")
+        elif sort == "popular":
+            qs = qs.order_by("-upvote_count", "-created_at")
         else:
             qs = qs.order_by("-created_at")
 
