@@ -3,9 +3,13 @@ from django.utils import timezone
 from django.db.models import Q
 from datetime import timedelta
 import uuid
+import pytz
 
 from .models import LiveSession
 from courses.models import Subject
+
+# ✅ Define IST timezone
+IST = pytz.timezone("Asia/Kolkata")
 
 
 class LiveSessionCreateSerializer(serializers.ModelSerializer):
@@ -51,6 +55,20 @@ class LiveSessionCreateSerializer(serializers.ModelSerializer):
 
         start_time = data["start_time"]
         end_time = data["end_time"]
+
+        # ==================================================
+        # 🔥 CRITICAL FIX: FORCE IST → MAKE AWARE
+        # ==================================================
+        if timezone.is_naive(start_time):
+            start_time = IST.localize(start_time)
+
+        if timezone.is_naive(end_time):
+            end_time = IST.localize(end_time)
+
+        # Save back
+        data["start_time"] = start_time
+        data["end_time"] = end_time
+
         now = timezone.now()
 
         # ✅ Time validation
@@ -152,7 +170,7 @@ class LiveSessionListSerializer(serializers.ModelSerializer):
         if request and request.user.has_role("TEACHER"):
             return True
 
-        # Students window
+        # ✅ Student join window (10 min early → end)
         return (
             obj.start_time - timedelta(minutes=10)
             <= now
