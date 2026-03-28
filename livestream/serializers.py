@@ -59,12 +59,12 @@ class LiveSessionCreateSerializer(serializers.ModelSerializer):
         # ==================================================
         # 🔥 FIX: MAKE DATETIME IST-AWARE (NO pytz)
         # ==================================================
+        # ✅ CORRECT timezone handling
         if timezone.is_naive(start_time):
-            start_time = start_time.replace(tzinfo=IST)
+            start_time = timezone.make_aware(start_time, IST)
 
         if timezone.is_naive(end_time):
-            end_time = end_time.replace(tzinfo=IST)
-
+            end_time = timezone.make_aware(end_time, IST)
         data["start_time"] = start_time
         data["end_time"] = end_time
 
