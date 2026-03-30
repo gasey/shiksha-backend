@@ -365,3 +365,83 @@ class SubjectStudentsView(APIView):
             "total_students": len(students),
             "students": students,
         })
+
+
+# =====================================================
+# TEACHER — ALL STUDENTS ACROSS ALL CLASSES
+# =====================================================
+
+class TeacherAllStudentsView(APIView):
+    """
+    HOW THIS WORKS:
+    1. Check the user is a teacher
+    2. Find all subjects this teacher is assigned to
+    3. For each subject, find all active enrollments
+    4. Collect unique students (a student might be in multiple courses)
+    5. Return the list with their course/subject info
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+
+        # Step 1: Only teachers can access this
+        if not user.has_role(Role.TEACHER):
+            return Response(
+                {"detail": "Only teachers allowed."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Step 2: Get all subjects assigned to this teacher
+        subjects = (
+            Subject.objects
+            .filter(subject_teachers__teacher=user)
+            .select_related("course")
+            .distinct()
+        )
+
+        # Step 3: Get all active enrollments for those courses
+        course_ids = [s.course_id for s in subjects]
+
+        enrollments = (
+            Enrollment.objects.filter(
+                course_id__in=course_ids,
+                status=Enrollment.STATUS_ACTIVE,
+            )
+            .select_related("user", "user__profile", "course")
+            .order_by("user__profile__full_name")
+        )
+
+        # Step 4: Build response — track seen user IDs to avoid duplicates
+        seen = set()
+        students = []
+
+        for enrollment in enrollments:
+            u = enrollment.user
+
+            # Skip if we already added this student
+            if u.id in seen:
+                continue
+            seen.add(u.id)
+
+            profile = getattr(u, "profile", None)
+
+            students.append({
+                "id": str(u.id),
+                "email": u.email,
+                "username": u.username,
+                "full_name": profile.full_name if profile else "",
+                "phone": profile.phone if profile else "",
+                "student_id": profile.student_id if profile else "",
+                "avatar_type": profile.avatar_type() if profile else None,
+                "avatar": profile.avatar_value() if profile else None,
+                "course_title": enrollment.course.title,
+                "enrolled_at": enrollment.enrolled_at,
+                "batch_code": enrollment.batch_code or "",
+            })
+
+        # Step 5: Return everything
+        return Response({
+            "total_students": len(students),
+            "students": students,
+        })
