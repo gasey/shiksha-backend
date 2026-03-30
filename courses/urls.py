@@ -12,6 +12,7 @@ from .views import (
     SubjectDashboardView,
     SubjectChaptersView,
     SubjectStudentsView,
+    TeacherAllStudentsView,
 )
 
 # recordings
@@ -31,6 +32,7 @@ from .views_progress import (
 urlpatterns = [
 
     path("teacher/my-classes/", TeacherMyClassesView.as_view()),
+    path("teacher/all-students/", TeacherAllStudentsView.as_view()),
 
     path("", CreateCourseView.as_view()),
 
