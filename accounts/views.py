@@ -36,9 +36,11 @@ from .serializers import (
     UserMeSerializer,
     StudentFormFillupSerializer,
     TeacherFormFillupSerializer,
+    TeacherListSerializer,
 )
 
-from .models import TeacherProfile
+from .models import TeacherProfile, Profile
+
 
 from .permissions import IsEmailVerified
 
