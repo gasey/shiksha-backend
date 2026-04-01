@@ -1,5 +1,12 @@
 from django.urls import path
-from .views import ChapterMaterials, UploadStudyMaterial, DeleteStudyMaterial, SubjectMaterials, StudentSubjectMaterials
+from .views import (
+    ChapterMaterials, 
+    UploadStudyMaterial, 
+    DeleteStudyMaterial, 
+    SubjectMaterials, 
+    StudentSubjectMaterials,
+    StudyMaterialDetail
+)
 urlpatterns = [
 
 
@@ -18,8 +25,15 @@ urlpatterns = [
         UploadStudyMaterial.as_view(),
     ),
 
+    # ✅ GET → material detail
     path(
         "materials/<uuid:material_id>/",
+        StudyMaterialDetail.as_view(),
+    ),
+
+    # ✅ DELETE → separate endpoint
+    path(
+        "materials/<uuid:material_id>/delete/",
         DeleteStudyMaterial.as_view(),
     ),
     path(
