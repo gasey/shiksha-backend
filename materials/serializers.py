@@ -6,10 +6,11 @@ class MaterialFileSerializer(serializers.ModelSerializer):
 
     file_name = serializers.SerializerMethodField()
     file_url = serializers.SerializerMethodField()
+    file_size = serializers.SerializerMethodField()
 
     class Meta:
         model = MaterialFile
-        fields = ["id", "file_url", "file_name"]
+        fields = ["id", "file_url", "file_name","file_size"]
 
     def get_file_name(self, obj):
         return obj.filename()
