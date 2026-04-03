@@ -1,29 +1,51 @@
-import logging
-from datetime import timedelta
-
 from django.conf import settings
-from django.utils import timezone
-from django.shortcuts import get_object_or_404
-from django.views.decorators.csrf import csrf_exempt
-from django.http import HttpResponse
-from django.db import transaction
-from django.db.models import Q
-
-from rest_framework import generics, status
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.exceptions import PermissionDenied
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.response import Response
-
-from livekit.api import WebhookReceiver
-
-from enrollments.models import Enrollment
-from .models import LiveSession, LiveSessionAttendance
-from .services import generate_livekit_token
 from .serializers import (
     LiveSessionCreateSerializer,
     LiveSessionListSerializer,
 )
+from .services import generate_livekit_token
+from .models import LiveSession, LiveSessionAttendance
+from enrollments.models import Enrollment
+from livekit.api import WebhookReceiver
+from rest_framework.response import Response
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.exceptions import PermissionDenied
+from rest_framework.permissions import IsAuthenticated
+from rest_framework import generics, status
+from django.db.models import Q  # ✅ kept (unchanged)
+from django.db import transaction
+from django.http import HttpResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
+import logging
+from datetime import timedelta
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+from django.contrib.auth import get_user_model  # ✅ ADDED
+
+
+def broadcast_session_update(session):
+    channel_layer = get_channel_layer()
+
+    # ✅ FIX (safe if Redis not running)
+    if not channel_layer:
+        return
+
+    async_to_sync(channel_layer.group_send)(
+        f"session_{session.id}",
+        {
+            "type": "session_update",
+            "data": {
+                "status": session.status,
+                "teacher_left_at": (
+                    session.teacher_left_at.isoformat()
+                    if session.teacher_left_at else None
+                ),
+            },
+        },
+    )
+
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +81,7 @@ class StudentLiveSessionListView(generics.ListAPIView):
         if course_id:
             queryset = queryset.filter(course_id=course_id)
 
-         # ✅ subject filter (FIXED POSITION)
+        # ✅ subject filter (FIXED POSITION)
         if subject_id:
             queryset = queryset.filter(subject_id=subject_id)
 
@@ -102,7 +124,8 @@ class TeacherLiveSessionListView(generics.ListAPIView):
             )
 
         # No subject_id — return all sessions across teacher's subjects
-        assigned_subject_ids = user.subject_assignments.values_list("subject_id", flat=True)
+        assigned_subject_ids = user.subject_assignments.values_list(
+            "subject_id", flat=True)
 
         return (
             LiveSession.objects
@@ -113,9 +136,6 @@ class TeacherLiveSessionListView(generics.ListAPIView):
         )
 
 
-# =========================
-# JOIN SESSION
-# =========================
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def join_live_session(request, session_id):
@@ -123,27 +143,33 @@ def join_live_session(request, session_id):
     session = get_object_or_404(LiveSession, id=session_id)
     now = timezone.now()
 
-    # 🚨 AUTO EXPIRE (NEW)
-    if session.teacher_left_at:
-        if now > session.teacher_left_at + timedelta(minutes=10):
-            session.status = LiveSession.STATUS_COMPLETED
-            session.save()
-            return Response(
-                {"detail": "Session ended (teacher left)"},
-                status=403
-            )
-
+    # 🚫 CANCELLED
     if session.status == LiveSession.STATUS_CANCELLED:
         return Response({"detail": "Session cancelled"}, status=400)
 
-    if now > session.end_time:
-        return Response({"detail": "Session ended"}, status=403)
+    # ==================================================
+    # 🔥 TEACHER DISCONNECT / EXPIRY LOGIC (CENTRALIZED)
+    # ==================================================
+    if session.teacher_left_at:
+        diff = now - session.teacher_left_at
+
+        # ❌ permanently ended
+        if diff > timedelta(minutes=60):
+            if session.status != LiveSession.STATUS_COMPLETED:
+                session.status = LiveSession.STATUS_COMPLETED
+                session.save(update_fields=["status"])  # ✅ FIX
+
+            return Response(
+                {"detail": "Session permanently ended"},
+                status=403
+            )
 
     # =========================
-    # STUDENT
+    # 👨‍🎓 STUDENT
     # =========================
     if user.has_role("STUDENT"):
 
+        # ✅ enrollment check FIRST
         is_enrolled = Enrollment.objects.filter(
             user=user,
             course=session.course,
@@ -153,36 +179,51 @@ def join_live_session(request, session_id):
         if not is_enrolled:
             return Response({"detail": "Not enrolled"}, status=403)
 
-        if now < session.start_time - timedelta(minutes=10):
-            return Response({"detail": "Too early to join"}, status=403)
+        # 🔥 early join restriction
+        if now < session.start_time - timedelta(minutes=15):
+            return Response({"detail": "Too early"}, status=403)
+
+        # 🔥 optional: block if teacher gone too long
+        if session.teacher_left_at:
+            diff = now - session.teacher_left_at
+
+            if diff > timedelta(minutes=30):
+                return Response(
+                    {"detail": "Teacher unavailable"},
+                    status=403
+                )
 
         is_teacher = False
 
     # =========================
-    # TEACHER
+    # 👨‍🏫 TEACHER
     # =========================
     elif user.has_role("TEACHER"):
 
         if not session.subject.subject_teachers.filter(teacher=user).exists():
-            return Response({"detail": "Not assigned to this subject"}, status=403)
+            return Response({"detail": "Not assigned"}, status=403)
 
         is_teacher = True
 
+        # 🔥 REVIVE SESSION
+        if session.teacher_left_at:
+            if now <= session.teacher_left_at + timedelta(minutes=60):
+                session.teacher_left_at = None
+                session.status = LiveSession.STATUS_LIVE
+                session.save(update_fields=[
+                             "teacher_left_at", "status"])  # ✅ FIX
+
     else:
-        return Response({"detail": "Unauthorized role"}, status=403)
+        return Response({"detail": "Unauthorized"}, status=403)
 
     # =========================
-    # TOKEN
+    # 🔐 TOKEN
     # =========================
-    try:
-        token = generate_livekit_token(
-            user=user,
-            session=session,
-            is_teacher=is_teacher,
-        )
-    except Exception:
-        logger.exception("LiveKit token generation failed")
-        return Response({"detail": "LiveKit error"}, status=500)
+    token = generate_livekit_token(
+        user=user,
+        session=session,
+        is_teacher=is_teacher,
+    )
 
     return Response({
         "livekit_url": settings.LIVEKIT_URL,
@@ -239,7 +280,7 @@ def cancel_live_session(request, session_id):
         return Response({"detail": "Cannot cancel a completed session."}, status=400)
 
     session.status = LiveSession.STATUS_CANCELLED
-    session.save()
+    session.save(update_fields=["status"])  # ✅ FIX
 
     return Response({"detail": "Session cancelled successfully."})
 
@@ -291,21 +332,28 @@ def _handle_participant_join(event):
 
     user_id = str(event.participant.identity)
 
+    User = get_user_model()  # ✅ FIX
+    user = User.objects.filter(id=user_id).first()
+    if not user:
+        return
+
     LiveSessionAttendance.objects.update_or_create(
         session=session,
-        user_id=user_id,
+        user=user,
         defaults={"joined_at": timezone.now()}
     )
 
-    # 🚨 If teacher joins → reset leave timer
-    if session.created_by and str(session.created_by.id) == user_id:
+    session.last_activity_at = timezone.now()
+
+    # 🔥 TEACHER JOIN
+    if str(session.created_by_id) == user_id:
         session.teacher_left_at = None
+        session.status = LiveSession.STATUS_LIVE
 
-        # 🚨 mark session LIVE
-        if session.status != LiveSession.STATUS_LIVE:
-            session.status = LiveSession.STATUS_LIVE
+    session.save(update_fields=["teacher_left_at",
+                 "status", "last_activity_at"])  # ✅ FIX
 
-        session.save()
+    broadcast_session_update(session)
 
 
 @transaction.atomic
@@ -316,28 +364,46 @@ def _handle_participant_left(event):
 
     user_id = str(event.participant.identity)
 
+    User = get_user_model()  # ✅ FIX
+    user = User.objects.filter(id=user_id).first()
+    if not user:
+        return
+
     attendance = LiveSessionAttendance.objects.filter(
         session=session,
-        user_id=user_id
+        user=user
     ).first()
 
     if attendance:
         attendance.left_at = timezone.now()
         attendance.save()
 
-    # 🚨 teacher left → start expiry timer
-    if session.created_by and str(session.created_by.id) == user_id:
+    session.last_activity_at = timezone.now()
+
+    # 🔥 TEACHER LEFT (network OR actual)
+    if str(session.created_by_id) == user_id:
         session.teacher_left_at = timezone.now()
-        session.save()
+        session.status = LiveSession.STATUS_PAUSED
+
+    session.save(update_fields=["teacher_left_at",
+                 "status", "last_activity_at"])  # ✅ FIX
+
+    broadcast_session_update(session)
 
 
 def _handle_room_started(event):
-    LiveSession.objects.filter(
-        room_name=event.room.name
-    ).update(status=LiveSession.STATUS_LIVE)
+    sessions = LiveSession.objects.filter(room_name=event.room.name)
+
+    for session in sessions:
+        session.status = LiveSession.STATUS_LIVE
+        session.save(update_fields=["status"])  # ✅ FIX
+        broadcast_session_update(session)
 
 
 def _handle_room_finished(event):
-    LiveSession.objects.filter(
-        room_name=event.room.name
-    ).update(status=LiveSession.STATUS_COMPLETED)
+    sessions = LiveSession.objects.filter(room_name=event.room.name)
+
+    for session in sessions:
+        session.status = LiveSession.STATUS_COMPLETED
+        session.save(update_fields=["status"])  # ✅ FIX
+        broadcast_session_update(session)

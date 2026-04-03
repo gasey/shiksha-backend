@@ -3,12 +3,11 @@ from django.utils import timezone
 from django.db.models import Q
 from datetime import timedelta
 import uuid
-from zoneinfo import ZoneInfo  # ✅ modern replacement
+from zoneinfo import ZoneInfo
 
 from .models import LiveSession
 from courses.models import Subject
 
-# ✅ IST timezone (built-in, no install needed)
 IST = ZoneInfo("Asia/Kolkata")
 
 
@@ -31,13 +30,11 @@ class LiveSessionCreateSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         user = request.user
 
-        # ✅ Role check
         if not user.has_role("TEACHER"):
             raise serializers.ValidationError(
                 {"non_field_errors": ["Only teachers can schedule sessions."]}
             )
 
-        # ✅ Subject validation
         try:
             subject = Subject.objects.select_related("course").get(
                 id=data["subject_id"]
@@ -47,7 +44,6 @@ class LiveSessionCreateSerializer(serializers.ModelSerializer):
                 {"subject_id": ["Invalid subject."]}
             )
 
-        # ✅ Assignment check
         if not subject.subject_teachers.filter(teacher=user).exists():
             raise serializers.ValidationError(
                 {"non_field_errors": ["You are not assigned to this subject."]}
@@ -56,21 +52,17 @@ class LiveSessionCreateSerializer(serializers.ModelSerializer):
         start_time = data["start_time"]
         end_time = data["end_time"]
 
-        # ==================================================
-        # 🔥 FIX: MAKE DATETIME IST-AWARE (NO pytz)
-        # ==================================================
-        # ✅ CORRECT timezone handling
         if timezone.is_naive(start_time):
             start_time = timezone.make_aware(start_time, IST)
 
         if timezone.is_naive(end_time):
             end_time = timezone.make_aware(end_time, IST)
+
         data["start_time"] = start_time
         data["end_time"] = end_time
 
         now = timezone.now()
 
-        # ✅ Time validation
         if start_time >= end_time:
             raise serializers.ValidationError(
                 {"end_time": ["End time must be after start time."]}
@@ -81,7 +73,6 @@ class LiveSessionCreateSerializer(serializers.ModelSerializer):
                 {"start_time": ["Cannot schedule a session in the past."]}
             )
 
-        # ✅ Overlap check
         overlap_exists = LiveSession.objects.filter(
             subject=subject
         ).filter(
@@ -146,18 +137,19 @@ class LiveSessionListSerializer(serializers.ModelSerializer):
         if obj.status == LiveSession.STATUS_CANCELLED:
             return "CANCELLED"
 
-        # 🚨 teacher left logic
+        # ✅ FIX: use 60 min window (match backend)
         if obj.teacher_left_at:
-            if now > obj.teacher_left_at + timedelta(minutes=10):
+            if now > obj.teacher_left_at + timedelta(minutes=60):
                 return "COMPLETED"
+            return "PAUSED"
+
+        if obj.status == LiveSession.STATUS_LIVE:
+            return "LIVE"
 
         if now < obj.start_time:
             return "SCHEDULED"
 
-        if obj.start_time <= now <= obj.end_time:
-            return "LIVE"
-
-        return "COMPLETED"
+        return "WAITING_FOR_TEACHER"
 
     def get_can_join(self, obj):
         now = timezone.now()
@@ -165,20 +157,15 @@ class LiveSessionListSerializer(serializers.ModelSerializer):
         if obj.status == LiveSession.STATUS_CANCELLED:
             return False
 
-        # 🚨 block if teacher left long ago
+        # ✅ FIX: 60 min rule
         if obj.teacher_left_at:
-            if now > obj.teacher_left_at + timedelta(minutes=10):
+            if now > obj.teacher_left_at + timedelta(minutes=60):
                 return False
 
         request = self.context.get("request")
 
-        # Teacher can always join
         if request and request.user.has_role("TEACHER"):
             return True
 
-        # ✅ Student join window (10 min early → end)
-        return (
-            obj.start_time - timedelta(minutes=10)
-            <= now
-            <= obj.end_time
-        )
+        # ✅ FIX: remove end_time dependency
+        return now >= obj.start_time - timedelta(minutes=15)
