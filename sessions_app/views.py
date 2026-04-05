@@ -9,7 +9,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from private_sessions.services.private_token import generate_private_token
+from sessions_app.services.private_token import generate_private_token
 
 from .models import PrivateSession, SessionParticipant, SessionRescheduleHistory, ChatMessage
 from .permissions import IsTeacher, IsStudent
