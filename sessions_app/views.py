@@ -9,7 +9,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from livestream.services.token import generate_livekit_token
+from private_sessions.services.private_token import generate_private_token
 
 from .models import PrivateSession, SessionParticipant, SessionRescheduleHistory, ChatMessage
 from .permissions import IsTeacher, IsStudent
@@ -489,12 +489,10 @@ def join_private_session(request, session_id):
     display_name = get_user_name(user)
 
     try:
-        token = generate_livekit_token(
+        token = generate_private_token(
             user=user,
             session=session,
-            is_teacher=is_teacher,
             display_name=display_name,
-            allow_publish=True,  # Private sessions: everyone can publish
         )
     except Exception:
         logger.exception("LiveKit token generation failed for private session")
@@ -537,7 +535,9 @@ def session_chat_messages(request, session_id):
     if not is_involved:
         return Response({"error": "Not a participant."}, status=status.HTTP_403_FORBIDDEN)
 
-    messages = ChatMessage.objects.filter(session=session).order_by("created_at")
+    messages = ChatMessage.objects.filter(
+        session=session
+    ).order_by("created_at")[:200]
     return Response(ChatMessageSerializer(messages, many=True).data)
 
 
@@ -560,7 +560,7 @@ def send_chat_message(request, session_id):
     if not is_teacher and not is_student:
         return Response({"error": "Not a participant."}, status=status.HTTP_403_FORBIDDEN)
 
-    if session.status not in ("ongoing", "approved"):
+    if session.status != "ongoing":
         return Response({"error": "Chat is only available for active sessions."}, status=status.HTTP_400_BAD_REQUEST)
 
     message_text = request.data.get("message", "").strip()
@@ -577,29 +577,5 @@ def send_chat_message(request, session_id):
         sender_role=role,
         message=message_text,
     )
-
-    # Broadcast via Django Channels if available
-    try:
-        from channels.layers import get_channel_layer
-        from asgiref.sync import async_to_sync
-
-        channel_layer = get_channel_layer()
-        if channel_layer:
-            async_to_sync(channel_layer.group_send)(
-                f"private_session_chat_{session_id}",
-                {
-                    "type": "chat_message",
-                    "data": {
-                        "id": str(chat_msg.id),
-                        "sender_name": display_name,
-                        "sender_role": role,
-                        "sender_id": str(user.id),
-                        "message": message_text,
-                        "created_at": chat_msg.created_at.isoformat(),
-                    },
-                },
-            )
-    except Exception:
-        logger.warning("Channel layer broadcast failed for chat message", exc_info=True)
 
     return Response(ChatMessageSerializer(chat_msg).data, status=status.HTTP_201_CREATED)
