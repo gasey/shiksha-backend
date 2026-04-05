@@ -3,10 +3,12 @@ from django.utils import timezone
 from django.db.models import Q
 from datetime import timedelta
 import uuid
-
+from zoneinfo import ZoneInfo
 
 from .models import LiveSession
 from courses.models import Subject
+
+IST = ZoneInfo("Asia/Kolkata")
 
 
 class LiveSessionCreateSerializer(serializers.ModelSerializer):
@@ -50,16 +52,11 @@ class LiveSessionCreateSerializer(serializers.ModelSerializer):
         start_time = data["start_time"]
         end_time = data["end_time"]
 
-        # ✅ Ensure aware datetime (NO IST forcing)
         if timezone.is_naive(start_time):
-            start_time = timezone.make_aware(start_time)
+            start_time = timezone.make_aware(start_time, IST)
 
         if timezone.is_naive(end_time):
-            end_time = timezone.make_aware(end_time)
-
-        # ✅ Normalize to UTC (CRITICAL)
-        start_time = start_time.astimezone(timezone.utc)
-        end_time = end_time.astimezone(timezone.utc)
+            end_time = timezone.make_aware(end_time, IST)
 
         data["start_time"] = start_time
         data["end_time"] = end_time
@@ -76,27 +73,20 @@ class LiveSessionCreateSerializer(serializers.ModelSerializer):
                 {"start_time": ["Cannot schedule a session in the past."]}
             )
 
-        # 🔥 PRODUCTION OVERLAP CHECK (SINGLE QUERY)
-        conflict = LiveSession.objects.filter(
-            subject=subject,
-            created_by=user,
-        ).exclude(
-            status__in=[
-                LiveSession.STATUS_CANCELLED,
-                LiveSession.STATUS_COMPLETED,
-            ]
+        overlap_exists = LiveSession.objects.filter(
+            subject=subject
         ).filter(
             Q(start_time__lt=end_time) &
             Q(end_time__gt=start_time)
-        ).order_by("start_time").first()
+        ).exists()
 
-        if conflict:
+        if overlap_exists:
             raise serializers.ValidationError(
                 {"non_field_errors": [
-                    f"Conflicts with another session: {conflict.title} ({start_str} - {end_str})"
-
+                    "This session overlaps with an existing session."
                 ]}
             )
+
         self._validated_subject = subject
         return data
 
