@@ -17,6 +17,7 @@ class SubjectSerializer(serializers.ModelSerializer):
             "id",
             "name",
             "order",
+            "image",
             "teachers",
             "chapters",   # ✅ added
             "stream_name",
