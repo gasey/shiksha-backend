@@ -6,8 +6,8 @@ from .models import Subject, Course, Board
 
 class SubjectSerializer(serializers.ModelSerializer):
     teachers = serializers.SerializerMethodField()
-    chapters = serializers.SerializerMethodField()   # ✅ added
-    serializer = SubjectSerializer(subjects, many=True, context={'request': request})
+    chapters = serializers.SerializerMethodField() 
+     image = serializers.SerializerMethodField()   # ✅ added
     stream_name = serializers.CharField(
         source="course.stream.name", read_only=True)
     board = serializers.SerializerMethodField()
